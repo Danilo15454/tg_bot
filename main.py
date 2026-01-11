@@ -2,7 +2,10 @@ import telebot
 from telebot import types
 from schedule import scheduleCore
 from lessons import lessonHandler
+import os
 import json
+from dotenv import load_dotenv
+load_dotenv()
 
 with open('config.json', 'r', encoding='utf-8') as f:
     # Загружаем данные из файла в переменную (обычно это словарь или список)
@@ -10,10 +13,9 @@ with open('config.json', 'r', encoding='utf-8') as f:
 
 print(data["admins"])
 
-TOKEN = "7854842729:AAGAyOEeo7T94TrbNN7LHr2xxowQiqD0DBY"
-SCHEDULE = scheduleCore("https://docs.google.com/spreadsheets/d/1Kd1MBIkr9AlfbhB3tZynjG4VfK8sGSX0Pla60DF0A_I/export?format=csv&gid=1091222058").maplike()
-DATABASE = lessonHandler(10,2,SCHEDULE)
-bot = telebot.TeleBot(TOKEN)
+SCHEDULE = scheduleCore(data["bot_data"]["sheet"]).maplike()
+DATABASE = lessonHandler(data["bot_data"]["schedule"]["subjects"],data["bot_data"]["schedule"]["weeks"],SCHEDULE)
+bot = telebot.TeleBot(os.getenv("TOKEN"))
 
 def start_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
