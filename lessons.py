@@ -1,5 +1,3 @@
-from schedule import scheduleCore
-
 DAYS = {"ПН":"B","ВТ":"C","СР":"D","ЧТ":"E","ПТ":"F","СБ":"G","ВС":"H"}
 TIME_CELLS = 4
 WEEK = {"AT":"A","JUMP":1}
