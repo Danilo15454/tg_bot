@@ -12,7 +12,7 @@ print(data["admins"])
 
 TOKEN = "7854842729:AAGAyOEeo7T94TrbNN7LHr2xxowQiqD0DBY"
 SCHEDULE = scheduleCore("https://docs.google.com/spreadsheets/d/1Kd1MBIkr9AlfbhB3tZynjG4VfK8sGSX0Pla60DF0A_I/export?format=csv&gid=1091222058").maplike()
-DATABASE lessonHandler(10,2,SCHEDULE)
+DATABASE = lessonHandler(10,2,SCHEDULE)
 bot = telebot.TeleBot(TOKEN)
 
 def start_keyboard():
