@@ -1,7 +1,23 @@
+from datetime import datetime
+days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 DAYS = {"ПН":"B","ВТ":"C","СР":"D","ЧТ":"E","ПТ":"F","СБ":"G","ВС":"H"}
 TIME_CELLS = 4
 WEEK = {"AT":"A","JUMP":1}
 LESSON_COLUMN = "K"
+
+now = datetime.now()
+today = days[now.weekday()]
+tomorrow = days[now.weekday() + 1]
+week = now.isocalendar().week
+
+def week_parity() :
+    if week % 2 == 0:
+        print('четная')
+    else:
+        print('нечет')  
+#Четная неделя = 1 розклад
+#Нечетная неделя = 2 розклад
+
 
 class lessonHandler:
     def __init__(self,lesson_count:int,week_count:int,maplike):
@@ -38,3 +54,4 @@ class lessonHandler:
             if dayMap:
                 result[d] = dayMap
         return result
+    
