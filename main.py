@@ -16,6 +16,8 @@ print(data["admins"])
 SCHEDULE = scheduleCore(data["bot_data"]["sheet"]).maplike()
 DATABASE = lessonHandler(data["bot_data"]["schedule"]["subjects"],data["bot_data"]["schedule"]["weeks"],SCHEDULE)
 bot = telebot.TeleBot(os.getenv("TOKEN"))
+DATABASE.load()
+
 
 def start_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -31,12 +33,12 @@ def start(message):
 # Розклад на сьогодні
 @bot.message_handler(func=lambda message: message.text == "Розклад на сьогодні")
 def scheduleToday(message):
-    bot.send_message(message.chat.id, "Розклад на сьогодні:")
+    bot.send_message(message.chat.id, DATABASE.schedule_today() )
 
 # Розклад на завтра
 @bot.message_handler(func=lambda message: message.text == "Розклад на завтра")
 def scheduleToday(message):
-    bot.send_message(message.chat.id, "Розклад на завтра:")
+    bot.send_message(message.chat.id, DATABASE.schedule_tomorrow())
 
 # Розклад на день
 @bot.message_handler(func=lambda message: message.text == "Розклад на день")
@@ -47,23 +49,23 @@ def scheduleDay(message):
 
 @bot.message_handler(func=lambda message: message.text == "ПН")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, "ПН:")
+    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ПН"))
 
 @bot.message_handler(func=lambda message: message.text == "ВТ")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, "ВТ:")
+    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ВТ"))
 
 @bot.message_handler(func=lambda message: message.text == "СР")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, "СР:")
+    bot.send_message(message.chat.id, DATABASE.take_schedule_day("СР"))
     
 @bot.message_handler(func=lambda message: message.text == "ЧТ")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, "ЧТ:")
+    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ЧТ"))
 
 @bot.message_handler(func=lambda message: message.text == "ПТ")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, "ПТ:")
+    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ПТ"))
 
 
 # Інше
