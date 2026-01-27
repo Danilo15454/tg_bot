@@ -61,11 +61,11 @@ class lessonHandler:
         day = days_list[now.weekday()]
         week_num = 1 if now.isocalendar().week % 2 == 0 else 2
         
-        output = f"📅 Розклад на сьогодні ({day})\n\n"
+        output = f"📅 Розклад на сьогодні (<b>{day}</b>)\n\n"
         sched = self.full_lesson_schedule.get(week_num, {}).get(day, {})
         
         if not sched:
-            return output + "Пар на сьогодні немає\n\n"
+            return output + "<b>Пар на сьогодні немає</b>\n\n"
 
         for time in sorted(sched.keys(), key=lambda t: [int(x) for x in t.split(":")]):
             les = sched[time]
@@ -75,10 +75,10 @@ class lessonHandler:
                 g1, g2 = lid.split("|")
                 l1 = (MIT_LINK if "-" in g1 else ZOOM_LINK).format(g1)
                 l2 = (MIT_LINK if "-" in g2 else ZOOM_LINK).format(g2)
-                output += f"{time} — {name}\n{l1} (1 група)\n{l2} (2 група)\n\n"
+                output += f"<b>{time}</b> — {name}\n{l1} (1 група)\n{l2} (2 група)\n\n"
             else:
                 l = (MIT_LINK if "-" in lid else ZOOM_LINK).format(lid)
-                output += f"{time} — {name}\n{l}\n\n"
+                output += f"<b>{time}</b> — {name}\n{l}\n\n"
 
         return output
 
@@ -94,13 +94,13 @@ class lessonHandler:
         week_num = 1 if date.isocalendar().week % 2 == 0 else 2
         
         if is_weekend:
-            output = f"📅 **Сьогодні вихідний, тому розклад на {day}**\n\n"
+            output = f"📅 Сьогодні вихідний, тому розклад на <b>{day}</b>\n\n"
         else:
-            output = f"📅 **Розклад на завтра ({day})**\n\n"
+            output = f"📅 Розклад на завтра (<b>{day}</b>)\n\n"
 
         sched = self.full_lesson_schedule.get(week_num, {}).get(day, {})
         if not sched:
-            return output + f"**Пар на {day} немає**\n\n"
+            return output + f"Пар на <b>{day}</b> немає\n\n"
 
         for time in sorted(sched.keys(), key=lambda t: [int(x) for x in t.split(":")]):
             les = sched[time]
@@ -110,16 +110,16 @@ class lessonHandler:
                 g1, g2 = lid.split("|")
                 l1 = (MIT_LINK if "-" in g1 else ZOOM_LINK).format(g1)
                 l2 = (MIT_LINK if "-" in g2 else ZOOM_LINK).format(g2)
-                output += f"**{time}** — {name}\n{l1} (1 група)\n{l2} (2 група)\n\n"
+                output += f"<b>{time}</b> — {name}\n{l1} (1 група)\n{l2} (2 група)\n\n"
             else:
                 l = (MIT_LINK if "-" in lid else ZOOM_LINK).format(lid)
-                output += f"**{time}** — {name}\n{l}\n\n"
+                output += f"<b>{time}</b> — {name}\n{l}\n\n"
 
         return output
 
 
     def take_schedule_day(self, day_name: str):
-        output = f"📅 Розклад {day_name}\n\n"
+        output = f"📅 Розклад <b>{day_name}</b>\n\n"
 
         week1 = self.full_lesson_schedule.get(1, {}).get(day_name, {})
         week2 = self.full_lesson_schedule.get(2, {}).get(day_name, {})
@@ -146,11 +146,11 @@ class lessonHandler:
             l2 = week2.get(time)
 
             if l1 == l2:
-                output += f"{time} — {format_lesson_info(l1)}\n\n"
+                output += f"<b>{time}</b> — {format_lesson_info(l1)}\n\n"
             else:
                 if l1:
-                    output += f"1 тиждень \n**{time}** — {format_lesson_info(l1)}\n\n"
+                    output += f"1 тиждень \n<b>{time}</b> — {format_lesson_info(l1)}\n\n"
                 if l2:
-                    output += f"2 тиждень \n**{time}** — {format_lesson_info(l2)}\n\n"
+                    output += f"2 тиждень \n<b>{time}</b> — {format_lesson_info(l2)}\n\n"
 
         return output
