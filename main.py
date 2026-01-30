@@ -2,10 +2,12 @@ import telebot
 from telebot import types
 from schedule import scheduleCore
 from lessons import lessonHandler
+from reminder import ReminderSystem
 import os
 import json
 from dotenv import load_dotenv
 load_dotenv()
+
 
 with open('config.json', 'r', encoding='utf-8') as f:
     # Загружаем данные из файла в переменную (обычно это словарь или список)
@@ -13,11 +15,14 @@ with open('config.json', 'r', encoding='utf-8') as f:
 
 print(data["admins"])
 
+bot = telebot.TeleBot(os.getenv("TOKEN"))
 SCHEDULE = scheduleCore(data["bot_data"]["sheet"]).maplike()
 DATABASE = lessonHandler(data["bot_data"]["schedule"]["subjects"],data["bot_data"]["schedule"]["weeks"],SCHEDULE)
-bot = telebot.TeleBot(os.getenv("TOKEN"))
+REMINDER = ReminderSystem(bot, DATABASE, data["users"])
 DATABASE.load()
+REMINDER.start()
 
+print(DATABASE.take_day())
 
 def start_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -29,6 +34,19 @@ def start_keyboard():
 def start(message):
 
     bot.send_message(message.chat.id, "👋 Вітаю! Це бот розкладу занять", reply_markup=start_keyboard(), parse_mode="HTML" )
+
+@bot.message_handler(commands=['id'])
+def send_ids(message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    username = message.from_user.username
+    first_name = message.from_user.first_name
+    language_code = message.from_user.language_code
+    print(f"\nchat_id: {chat_id}\nuser_id: {user_id}\nusername: {username}\nfirst_name: {first_name}\nlanguage_code: {language_code}")
+    bot.reply_to(
+        message,
+        f"chat_id: {chat_id}\nuser_id: {user_id}\nusername: {username}\nfirst_name: {first_name}\nlanguage_code: {language_code}"
+    )   
 
 # Розклад на сьогодні
 @bot.message_handler(func=lambda message: message.text == "Розклад на сьогодні")
@@ -104,4 +122,10 @@ def goback(message):
 
 
 # Запуск бота
-bot.polling()
+try:
+    bot.polling()
+finally:
+    REMINDER.stop()
+
+
+# infinity_polling()

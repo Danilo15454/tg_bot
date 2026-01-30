@@ -1,6 +1,7 @@
 {
-  "users" : [],
-  "admins" : ["banan"],
+  "users" : [5272371081, 1917919227],
+  "username": [],
+  "admins" : [5272371081, 1917919227],
   "accounts": {},
   "scheduled": {},
   "bot_data": {

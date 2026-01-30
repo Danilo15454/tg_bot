@@ -9,6 +9,17 @@ ZOOM_LINK = "https://krkm-dnu-edu-ua.zoom.us/j/{}"
 LESSON_COLUMN = "K"
 NAME_LESSON_COLUMN = "J"
 
+def format_link(string: str) -> str:
+    if not string:
+        return ""
+    
+    if "|" in string:
+        g1, g2 = string.split("|")
+        l1 = (MIT_LINK if "-" in g1 else ZOOM_LINK).format(g1)
+        l2 = (MIT_LINK if "-" in g2 else ZOOM_LINK).format(g2)
+        return f"{l1} (1 група)\n{l2} (2 група)"
+    else:
+        return (MIT_LINK if "-" in string else ZOOM_LINK).format(string)
 
 class lessonHandler:
     def __init__(self,lesson_count:int,week_count:int,maplike):
@@ -55,6 +66,20 @@ class lessonHandler:
             if dayMap:
                 result[d] = dayMap
         return result
+    
+    # -----------------------------------------------------
+    def take_day(self):
+        now = datetime.now()
+        day = days_list[now.weekday()]
+        week_num = 1 if now.isocalendar().week % 2 == 0 else 2
+
+        sched = self.full_lesson_schedule.get(week_num, {}).get(day, {})
+
+        return sched
+
+
+
+    # -----------------------------------------------------
 
     def schedule_today(self):
         now = datetime.now()
@@ -83,7 +108,6 @@ class lessonHandler:
         return output
 
     def schedule_tomorrow(self):
-        from datetime import timedelta
         date = datetime.now() + timedelta(days=1)
         
         is_weekend = date.weekday() >= 5
