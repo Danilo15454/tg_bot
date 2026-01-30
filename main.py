@@ -85,8 +85,16 @@ def scheduleDay(message):
 @bot.message_handler(func=lambda message: message.text == "Інше")
 def scheduleToday(message):
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("Підписатися на напоминання", "Відписатися від напоминань", "обрати Google акаунт", "Назад")
+    keyboard.add("Підписатися на напоминання", "Відписатися від напоминань", "обрати Google акаунт", "Автори", "Назад")
     bot.send_message(message.chat.id, "Виберіть що хочете", reply_markup=keyboard)
+
+@bot.message_handler(func=lambda message: message.text == "Автори")
+def scheduleDay(message):
+    txt = (
+        "@Pixel_Protogen та @danilka_kryt"
+    )
+    bot.send_message(message.chat.id, txt,
+    parse_mode="HTML")
 
 @bot.message_handler(func=lambda message: message.text == "Підписатися на напоминання")
 def scheduleDay(message):
