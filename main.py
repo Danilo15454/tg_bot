@@ -32,21 +32,7 @@ def start_keyboard():
 # /start
 @bot.message_handler(commands=['start'])
 def start(message):
-
     bot.send_message(message.chat.id, "👋 Вітаю! Це бот розкладу занять", reply_markup=start_keyboard(), parse_mode="HTML" )
-
-@bot.message_handler(commands=['id'])
-def send_ids(message):
-    chat_id = message.chat.id
-    user_id = message.from_user.id
-    username = message.from_user.username
-    first_name = message.from_user.first_name
-    language_code = message.from_user.language_code
-    print(f"\nchat_id: {chat_id}\nuser_id: {user_id}\nusername: {username}\nfirst_name: {first_name}\nlanguage_code: {language_code}")
-    bot.reply_to(
-        message,
-        f"chat_id: {chat_id}\nuser_id: {user_id}\nusername: {username}\nfirst_name: {first_name}\nlanguage_code: {language_code}"
-    )   
 
 # Розклад на сьогодні
 @bot.message_handler(func=lambda message: message.text == "Розклад на сьогодні")
@@ -103,11 +89,25 @@ def scheduleToday(message):
 
 @bot.message_handler(func=lambda message: message.text == "Підписатися на напоминання")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, "Ви підписалися на напоминання", reply_markup=start_keyboard(), parse_mode="HTML" )
+    chat_id = message.chat.id
+    if str(chat_id) in data["users"]:
+        bot.send_message(chat_id, "Ви вже піписані на напоминання", reply_markup=start_keyboard(), parse_mode="HTML" )
+    else:
+        bot.send_message(chat_id, "Ви підписалися на напоминання", reply_markup=start_keyboard(), parse_mode="HTML" )
+        data["users"][str(chat_id)] = {
+            "name":f"{message.from_user.username}","account":0
+        }
+
+
 
 @bot.message_handler(func=lambda message: message.text == "Відписатися від напоминань")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, "Ви відписалися від напоминань", reply_markup=start_keyboard(), parse_mode="HTML" )
+    chat_id = str(message.chat.id)
+    if chat_id in data["users"]:
+        bot.send_message(message.chat.id, "Ви відписалися на напоминання", reply_markup=start_keyboard(), parse_mode="HTML" )
+        data["users"].pop(chat_id, None)
+    else:
+        bot.send_message(message.chat.id, "Ви ще не піписані на напоминання", reply_markup=start_keyboard(), parse_mode="HTML" )
 
 @bot.message_handler(func=lambda message: message.text == "обрати Google акаунт")
 def scheduleDay(message):
@@ -126,6 +126,8 @@ try:
     bot.polling()
 finally:
     REMINDER.stop()
+    with open('config.json', 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
 
 # infinity_polling()
