@@ -65,8 +65,9 @@ class ReminderSystem:
           f"{format_link(lesson['id'])}"
         )
 
-        for chat_id in self.users:
+        for chat_id_str in self.users:
             try:
+                chat_id = int(chat_id_str)
                 self.bot.send_message(chat_id, text, parse_mode="HTML")
             except Exception as e:
                 print(f"Send failed ({chat_id}):", e)
