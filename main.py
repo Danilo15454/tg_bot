@@ -91,7 +91,7 @@ def scheduleToday(message):
 @bot.message_handler(func=lambda message: message.text == "Автори")
 def scheduleDay(message):
     txt = (
-        "@Pixel_Protogen та @danilka_kryt"
+        "@Nebula_Protogen та @danilka_kryt"
     )
     bot.send_message(message.chat.id, txt,
     parse_mode="HTML")
@@ -122,7 +122,7 @@ def scheduleDay(message):
 
 @bot.message_handler(func=lambda message: message.text == "обрати Google акаунт")
 def scheduleDay(message):
-    if chat_id in data["users"]:
+    if str(message.chat.id) in data["users"]:
         bot.send_message(message.chat.id, "Напишіть цифру акаунту", reply_markup=start_keyboard(), parse_mode="HTML" ) 
         bot.register_next_step_handler(message, process_google_acc)
     else:
