@@ -10,10 +10,11 @@ load_dotenv()
 
 
 with open('config.json', 'r', encoding='utf-8') as f:
-    # Загружаем данные из файла в переменную (обычно это словарь или список)
     data = json.load(f)
 
-print(data["admins"])
+def push()
+    with open('config.json', 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
 bot = telebot.TeleBot(os.getenv("TOKEN"))
 SCHEDULE = scheduleCore(data["bot_data"]["sheet"]).maplike()
@@ -21,8 +22,6 @@ DATABASE = lessonHandler(data["bot_data"]["schedule"]["subjects"],data["bot_data
 REMINDER = ReminderSystem(bot, DATABASE, data["users"])
 DATABASE.load()
 REMINDER.start()
-
-print(DATABASE.take_day())
 
 def start_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -97,6 +96,7 @@ def scheduleDay(message):
         data["users"][str(chat_id)] = {
             "name":f"{message.from_user.username}","account":0
         }
+        push()
 
 
 
@@ -106,6 +106,7 @@ def scheduleDay(message):
     if chat_id in data["users"]:
         bot.send_message(message.chat.id, "Ви відписалися на напоминання", reply_markup=start_keyboard(), parse_mode="HTML" )
         data["users"].pop(chat_id, None)
+        push()
     else:
         bot.send_message(message.chat.id, "Ви ще не піписані на напоминання", reply_markup=start_keyboard(), parse_mode="HTML" )
 
@@ -126,8 +127,6 @@ try:
     bot.polling()
 finally:
     REMINDER.stop()
-    with open('config.json', 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-
-
+    push()
+    
 # infinity_polling()
