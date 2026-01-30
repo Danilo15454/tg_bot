@@ -8,8 +8,6 @@ import json
 from dotenv import load_dotenv
 load_dotenv()
 
-print("Бот запущений")
-
 with open('config.json', 'r', encoding='utf-8') as f:
     data = json.load(f)
 
@@ -29,6 +27,9 @@ def start_keyboard():
     keyboard.add("Розклад на сьогодні", "Розклад на завтра", "Розклад на день", "Інше")
     return keyboard
 
+def getUserAcc(chat_id):
+    return data["users"].get(str(chat_id), {"account": 0})["account"]
+
 # /start
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -37,13 +38,13 @@ def start(message):
 # Розклад на сьогодні
 @bot.message_handler(func=lambda message: message.text == "Розклад на сьогодні")
 def scheduleToday(message):
-    bot.send_message(message.chat.id, DATABASE.schedule_today(),
+    bot.send_message(message.chat.id, DATABASE.schedule_today(getUserAcc(message.chat.id)),
     parse_mode="HTML")
 
 # Розклад на завтра
 @bot.message_handler(func=lambda message: message.text == "Розклад на завтра")
 def scheduleToday(message):
-    bot.send_message(message.chat.id, DATABASE.schedule_tomorrow(),
+    bot.send_message(message.chat.id, DATABASE.schedule_tomorrow(getUserAcc(message.chat.id)),
     parse_mode="HTML")
 
 # Розклад на день
@@ -55,28 +56,28 @@ def scheduleDay(message):
 
 @bot.message_handler(func=lambda message: message.text == "ПН")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ПН"),
+    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ПН",getUserAcc(message.chat.id)),
     parse_mode="HTML")
 
 @bot.message_handler(func=lambda message: message.text == "ВТ")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ВТ"),
+    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ВТ",getUserAcc(message.chat.id)),
     parse_mode="HTML")
 
 @bot.message_handler(func=lambda message: message.text == "СР",
     parse_mode="HTML")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, DATABASE.take_schedule_day("СР"),
+    bot.send_message(message.chat.id, DATABASE.take_schedule_day("СР",getUserAcc(message.chat.id)),
     parse_mode="HTML")
     
 @bot.message_handler(func=lambda message: message.text == "ЧТ")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ЧТ"),
+    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ЧТ",getUserAcc(message.chat.id)),
     parse_mode="HTML")
 
 @bot.message_handler(func=lambda message: message.text == "ПТ")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ПТ"),
+    bot.send_message(message.chat.id, DATABASE.take_schedule_day("ПТ",getUserAcc(message.chat.id)),
     parse_mode="HTML")
 
 
@@ -109,13 +110,33 @@ def scheduleDay(message):
         data["users"].pop(chat_id, None)
         push()
     else:
-        bot.send_message(message.chat.id, "Ви ще не піписані на напоминання", reply_markup=start_keyboard(), parse_mode="HTML" )
+        bot.send_message(message.chat.id, "Ви ще не підисані на напоминання", reply_markup=start_keyboard(), parse_mode="HTML" )
 
 @bot.message_handler(func=lambda message: message.text == "обрати Google акаунт")
 def scheduleDay(message):
-    bot.send_message(message.chat.id, "Напишіть цифру акаунту(test)", reply_markup=start_keyboard(), parse_mode="HTML" ) 
+    if chat_id in data["users"]:
+        bot.send_message(message.chat.id, "Напишіть цифру акаунту", reply_markup=start_keyboard(), parse_mode="HTML" ) 
+        bot.register_next_step_handler(message, process_google_acc)
+    else:
+        bot.send_message(message.chat.id, "Ви ще не підисані на напоминання", reply_markup=start_keyboard(), parse_mode="HTML" ) 
+    
     # Зделать вибор акаунта 
 
+def process_google_acc(message):
+    try:
+        number = int(message.text)
+        if number < 0 or number > 255:
+            raise ValueError
+    except ValueError:
+        bot.send_message(
+            message.chat.id,
+            "❌ Невірне число."
+        )
+        return
+
+    bot.send_message(message.chat.id,f"✅ Ви обрали акаунт №{number}")
+    data["users"][str(message.chat.id)]["account"] = number
+    push()
 
 # назад
 @bot.message_handler(func=lambda message: message.text == "Назад")
@@ -125,6 +146,7 @@ def goback(message):
 
 # Запуск бота
 try:
+    print("Бот запущений")
     bot.polling()
 finally:
     REMINDER.stop()
