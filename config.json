@@ -1,10 +1,24 @@
 {
-  "users" : [],
-  "admins" : ["banan"],
-  "accounts": {},
-  "scheduled": {},
-  "bot_data": {
-    "sheet" : "https://docs.google.com/spreadsheets/d/1Kd1MBIkr9AlfbhB3tZynjG4VfK8sGSX0Pla60DF0A_I/export?format=csv&gid=1091222058",
-    "schedule" : { "subjects" : 10 , "weeks" : 2 }
-  }
+    "users": {
+        "1917919227": {
+            "name": "Nebula_Protogen",
+            "account": 2
+        },
+        "5272371081": {
+            "name": "danilka_kryt",
+            "account": 2
+        }
+    },
+    "admins": [
+        5272371081,
+        1917919227
+    ],
+    "scheduled": {},
+    "bot_data": {
+        "sheet": "https://docs.google.com/spreadsheets/d/1Kd1MBIkr9AlfbhB3tZynjG4VfK8sGSX0Pla60DF0A_I/export?format=csv&gid=1091222058",
+        "schedule": {
+            "subjects": 10,
+            "weeks": 2
+        }
+    }
 }

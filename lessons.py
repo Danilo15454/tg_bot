@@ -3,12 +3,24 @@ days_list = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
 DAYS = {"ПН":"B","ВТ":"C","СР":"D","ЧТ":"E","ПТ":"F","СБ":"G","ВС":"H"}
 TIME_CELLS = 4
 WEEK = {"AT":"A","JUMP":1}
-MIT_LINK = "https://meet.google.com/{}"
+MIT_LINK = "https://meet.google.com/{}?authuser={}"
 ZOOM_LINK = "https://krkm-dnu-edu-ua.zoom.us/j/{}"
 
 LESSON_COLUMN = "K"
 NAME_LESSON_COLUMN = "J"
 
+def _format_link_raw(l,n):
+   return MIT_LINK.format(l, n) if "-" in l else ZOOM_LINK.format(l)
+
+def format_link(string: str,mit: int=0) -> str:
+    if not string:
+        return ""
+    
+    if "|" in string:
+        g1, g2 = string.split("|")
+        return f"{_format_link_raw(g1,mit)} (1 група)\n{_format_link_raw(g2,mit)} (2 група)"
+    else:
+        return _format_link_raw(string,mit)
 
 class lessonHandler:
     def __init__(self,lesson_count:int,week_count:int,maplike):
@@ -55,8 +67,22 @@ class lessonHandler:
             if dayMap:
                 result[d] = dayMap
         return result
+    
+    # -----------------------------------------------------
+    def take_day(self):
+        now = datetime.now()
+        day = days_list[now.weekday()]
+        week_num = 1 if now.isocalendar().week % 2 == 0 else 2
 
-    def schedule_today(self):
+        sched = self.full_lesson_schedule.get(week_num, {}).get(day, {})
+
+        return sched
+
+
+
+    # -----------------------------------------------------
+
+    def schedule_today(self,mit:int=0):
         now = datetime.now()
         day = days_list[now.weekday()]
         week_num = 1 if now.isocalendar().week % 2 == 0 else 2
@@ -70,20 +96,11 @@ class lessonHandler:
         for time in sorted(sched.keys(), key=lambda t: [int(x) for x in t.split(":")]):
             les = sched[time]
             name, lid = les.get("name", "Без назви"), les.get("id", "")
-            
-            if "|" in lid:
-                g1, g2 = lid.split("|")
-                l1 = (MIT_LINK if "-" in g1 else ZOOM_LINK).format(g1)
-                l2 = (MIT_LINK if "-" in g2 else ZOOM_LINK).format(g2)
-                output += f"<b>{time}</b> — {name}\n{l1} (1 група)\n{l2} (2 група)\n\n"
-            else:
-                l = (MIT_LINK if "-" in lid else ZOOM_LINK).format(lid)
-                output += f"<b>{time}</b> — {name}\n{l}\n\n"
+            output += f"<b>{time}</b> — {name}\n{format_link(lid,mit)}\n\n"
 
         return output
 
-    def schedule_tomorrow(self):
-        from datetime import timedelta
+    def schedule_tomorrow(self,mit:int=0):
         date = datetime.now() + timedelta(days=1)
         
         is_weekend = date.weekday() >= 5
@@ -105,20 +122,12 @@ class lessonHandler:
         for time in sorted(sched.keys(), key=lambda t: [int(x) for x in t.split(":")]):
             les = sched[time]
             name, lid = les.get("name", "Без назви"), les.get("id", "")
-            
-            if "|" in lid:
-                g1, g2 = lid.split("|")
-                l1 = (MIT_LINK if "-" in g1 else ZOOM_LINK).format(g1)
-                l2 = (MIT_LINK if "-" in g2 else ZOOM_LINK).format(g2)
-                output += f"<b>{time}</b> — {name}\n{l1} (1 група)\n{l2} (2 група)\n\n"
-            else:
-                l = (MIT_LINK if "-" in lid else ZOOM_LINK).format(lid)
-                output += f"<b>{time}</b> — {name}\n{l}\n\n"
+            output += f"<b>{time}</b> — {name}\n{format_link(lid,mit)}\n\n"
 
         return output
 
 
-    def take_schedule_day(self, day_name: str):
+    def take_schedule_day(self, day_name: str,mit:int=0):
         output = f"📅 Розклад <b>{day_name}</b>\n\n"
 
         week1 = self.full_lesson_schedule.get(1, {}).get(day_name, {})
@@ -129,15 +138,7 @@ class lessonHandler:
         def format_lesson_info(lesson):
             name = lesson.get("name", "Без назви")
             lid = lesson.get("id", "")
-            
-            if "|" in lid:
-                g1, g2 = lid.split("|")
-                link1 = MIT_LINK.format(g1) if "-" in g1 else ZOOM_LINK.format(g1)
-                link2 = MIT_LINK.format(g2) if "-" in g2 else ZOOM_LINK.format(g2)
-                return f"{name}\n{link1} (1 група)\n{link2} (2 група)"
-            else:
-                link = MIT_LINK.format(lid) if "-" in lid else ZOOM_LINK.format(lid)
-                return f"{name}\n{link}"
+            return f"{name}\n{format_link(lid,mit)}"
 
         sorted_times = sorted(all_times, key=lambda t: [int(x) for x in t.split(':')])
 
