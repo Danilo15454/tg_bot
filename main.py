@@ -1,5 +1,6 @@
 import telebot
 from telebot import types
+from telebot.apihelper import ApiTelegramException
 from schedule import scheduleCore
 from lessons import lessonHandler
 from reminder import ReminderSystem
@@ -33,7 +34,17 @@ def getUserAcc(chat_id):
 # /start
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.send_message(message.chat.id, "👋 Вітаю! Це бот розкладу занять", reply_markup=start_keyboard(), parse_mode="HTML" )
+    text = (
+    "👋 Вітаю! Це бот розкладу занять 📚\n\n"
+    "Тут ви можете:\n"
+    "• 📅 дізнатися розклад на сьогодні\n"
+    "• ⏭️ переглянути розклад на завтра\n"
+    "• 🗓️ отримати розклад на будь-який день тижня\n"
+    "• 🔔 підписатися на нагадування\n"
+    "• ⏰ отримувати нагадування перед початком занять\n\n"
+    "Користуйтеся командами або кнопками меню 👇"
+    )
+    bot.send_message(message.chat.id, text, reply_markup=start_keyboard(), parse_mode="HTML" )
 
 # Розклад на сьогодні
 @bot.message_handler(func=lambda message: message.text == "Розклад на сьогодні")
@@ -130,6 +141,23 @@ def scheduleDay(message):
     
     # Зделать вибор акаунта 
 
+@bot.message_handler(func=lambda message: message.text == "cat")
+def scheduleDay(message):
+    txt = (
+    "───▐▀▄──────▄▀▌───▄▄▄▄▄▄▄\n"
+    "───▌▒▒▀▄▄▄▄▀▒▒▐▄▀▀▒██▒██▒▀▀▄\n"
+    "──▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▀▄\n"
+    "──▌▒▒▒▒▒▒▒▒▒▒▒▒▒▄▒▒▒▒▒▒▒▒▒▒▒▒▒▀▄\n"
+    "▀█▒▒█▌▒▒█▒▒▐█▒▒▀▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌\n"
+    "▀▌▒▒▒▒▒▀▒▀▒▒▒▒▒▀▀▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▐ ▄▄\n"
+    "▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▄█▒█\n"
+    "▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█▀\n"
+    "──▐▄▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▄▌\n"
+    "────▀▄▄▀▀▀▀▄▄▀▀▀▀▀▀▄▄▀▀▀▀▀▀▄▄▀"
+    )
+    bot.send_message(message.chat.id, txt,
+    parse_mode="HTML")
+
 def process_google_acc(message):
     try:
         number = int(message.text)
@@ -146,6 +174,47 @@ def process_google_acc(message):
     data["users"][str(message.chat.id)]["account"] = number
     push()
 
+def is_admin(user_id):
+    with open("config.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return user_id in data["admins"]
+
+@bot.message_handler(commands=["announce"])
+def announce(message):
+    if not is_admin(message.from_user.id):
+        bot.reply_to(message, "❌ <b>У тебе немає прав на цю команду</b>", parse_mode="HTML")
+        return
+
+    text = message.text.replace("/announce", "", 1).strip()
+    if not text:
+        bot.reply_to(message, "❗ <b>Напишіть текст оголошення після команди</b>", parse_mode="HTML")
+        return
+
+    with open("config.json", "r", encoding="utf-8") as f:
+        users = json.load(f).get("users", [])
+
+    sent = 0
+    failed = 0
+
+    for chat_id in users:
+        try:
+            bot.send_message(
+                chat_id,
+                f"📢 <b>Оголошення:</b>\n\n{text}",
+                parse_mode="HTML"
+            )
+            sent += 1
+        except ApiTelegramException as e:
+            failed += 1
+            print(f"❌ Не надіслано {chat_id}: {e}")
+
+    bot.reply_to(
+        message,
+        f"✅ <b>Відправлено:</b> {sent}\n"
+        f"⚠️ <b>Не доставлено:</b> {failed}",
+        parse_mode="HTML"
+    )
+
 # назад
 @bot.message_handler(func=lambda message: message.text == "Назад")
 def goback(message):
@@ -154,10 +223,11 @@ def goback(message):
 
 # Запуск бота
 try:
-    print("Бот запущений")
-    bot.polling()
+    print("🤖 Бот запущений")
+    bot.infinity_polling(skip_pending=True)
+except KeyboardInterrupt:
+    print("⛔ Бота зупинено вручну")
 finally:
+    print("🧹 Завершення роботи...")
     REMINDER.stop()
     push()
-    
-# infinity_polling()
