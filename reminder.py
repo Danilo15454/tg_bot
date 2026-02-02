@@ -1,6 +1,7 @@
 import threading
 import time
 from datetime import datetime, timedelta
+from scheduleChange import lessonReschedulerHandler
 
 class ReminderSystem:
     def __init__(self, bot, database, users, check_interval=60,format_link_lambda=None):
