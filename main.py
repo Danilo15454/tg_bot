@@ -4,6 +4,7 @@ from telebot.apihelper import ApiTelegramException
 from schedule import scheduleCore
 from lessons import lessonHandler
 from reminder import ReminderSystem
+from lessons import format_link
 import os
 import json
 from dotenv import load_dotenv
@@ -16,10 +17,13 @@ def push():
     with open('config.json', 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
+def getUserAcc(chat_id):
+    return data["users"].get(str(chat_id), {"account": 0})["account"]
+
 bot = telebot.TeleBot(os.getenv("TOKEN"))
 SCHEDULE = scheduleCore(data["bot_data"]["sheet"]).maplike()
 DATABASE = lessonHandler(data["bot_data"]["schedule"]["subjects"],data["bot_data"]["schedule"]["weeks"],SCHEDULE)
-REMINDER = ReminderSystem(bot, DATABASE, data["users"])
+REMINDER = ReminderSystem(bot, DATABASE, data["users"],60,lambda x, y: format_link(x, getUserAcc(y)))
 DATABASE.load()
 REMINDER.start()
 
@@ -27,9 +31,6 @@ def start_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add("Розклад на сьогодні", "Розклад на завтра", "Розклад на день", "Інше")
     return keyboard
-
-def getUserAcc(chat_id):
-    return data["users"].get(str(chat_id), {"account": 0})["account"]
 
 # /start
 @bot.message_handler(commands=['start'])

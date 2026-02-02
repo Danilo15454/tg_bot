@@ -6,12 +6,17 @@
         },
         "5272371081": {
             "name": "danilka_kryt",
+            "account": 2
+        },
+        "1779087086": {
+            "name": "Oli_San",
             "account": 0
         }
     },
     "admins": [
         5272371081,
-        1917919227
+        1917919227,
+        1779087086
     ],
     "scheduled": {},
     "bot_data": {

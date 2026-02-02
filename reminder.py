@@ -1,11 +1,9 @@
 import threading
 import time
 from datetime import datetime, timedelta
-from lessons import format_link
-
 
 class ReminderSystem:
-    def __init__(self, bot, database, users, check_interval=60):
+    def __init__(self, bot, database, users, check_interval=60,format_link_lambda=None):
         """
         bot        – telebot.TeleBot instance
         database   – DATABASE from lessonHandler
@@ -16,6 +14,7 @@ class ReminderSystem:
         self.users = users
         self.check_interval = check_interval
         self.running = False
+        self.format = format_link_lambda
         self.sent_cache = set()  # prevents duplicate reminders
 
     def start(self):
@@ -57,17 +56,18 @@ class ReminderSystem:
                     self.sent_cache.add(cache_key)
 
     def _send(self, lesson, lesson_time):
-        text = (
-          "⏰ <b>Через 10 хвилин починається урок: </b>\n\n"
-          f"📚{lesson['name']}\n"
-          f"🕒{lesson_time.strftime('%H:%M')}\n"
-          "🔗 Підключення:\n"
-          f"{format_link(lesson['id'])}"
-        )
-
         for chat_id_str in self.users:
             try:
                 chat_id = int(chat_id_str)
+
+                text = (
+                "⏰ <b>Через 10 хвилин починається урок: </b>\n\n"
+                f"📚{lesson['name']}\n"
+                f"🕒{lesson_time.strftime('%H:%M')}\n"
+                "🔗 Підключення:\n"
+                f"{self.format(lesson['id'],chat_id)}"
+                )
+
                 self.bot.send_message(chat_id, text, parse_mode="HTML")
             except Exception as e:
                 print(f"Send failed ({chat_id}):", e)
