@@ -44,6 +44,7 @@ def is_admin(user_id):
 #
 #
 bot = telebot.TeleBot(os.getenv("TOKEN"))
+BOT_ID = bot.get_me().id
 SCHEDULE = scheduleCore(data["bot_data"]["sheet"]).maplike()
 DATABASE = lessonHandler(data["bot_data"]["schedule"]["subjects"],data["bot_data"]["schedule"]["weeks"],SCHEDULE)
 REMINDER = ReminderSystem(bot, DATABASE, data["users"],60,lambda x, y: format_link(x, getUserAcc(y)))
@@ -479,6 +480,25 @@ def goback(message):
     admin_command(message, lambda msg:
             bot.send_message(message.chat.id, "Виберіть операцію:", reply_markup=admin_keyboard(), parse_mode="HTML" )
         )
+
+@bot.message_handler(content_types=["new_chat_members"])
+def new_chat_member_handler(message):
+    for new_user in message.new_chat_members:
+        if new_user.id == BOT_ID:
+            chat_id = str(message.chat.id)
+            if chat_id not in data["groups"]:
+                data["groups"].append(chat_id)
+                bot.send_message(message.chat.id, "Бот автоматично підписан на группу та буде відправляти нагадування!", parse_mode="HTML" )
+                push()
+
+@bot.message_handler(content_types=["left_chat_member"])
+def left_chat_handler(message):
+    left_user = message.left_chat_member
+    if left_user.id == BOT_ID:
+        chat_id = str(message.chat.id)
+        if chat_id in data["groups"]:
+            data["groups"].remove(chat_id)
+            push()
 
 # Запуск бота
 try:

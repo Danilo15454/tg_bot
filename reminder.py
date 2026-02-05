@@ -1,7 +1,6 @@
 import threading
 import time
 from datetime import datetime, timedelta
-from scheduleChange import lessonReschedulerHandler
 
 class ReminderSystem:
     def __init__(self, bot, database, users, check_interval=60,format_link_lambda=None):
@@ -16,7 +15,7 @@ class ReminderSystem:
         self.check_interval = check_interval
         self.running = False
         self.format = format_link_lambda
-        self.sent_cache = set()  # prevents duplicate reminders
+        self.sent_cache = set()
 
     def start(self):
         if not self.users:
@@ -38,7 +37,6 @@ class ReminderSystem:
     def _check_lessons(self):
         now = datetime.now()
 
-        # take current day only
         day_schedule = self.database.take_day() or {}
 
         for time_str, lesson in day_schedule.items():
@@ -54,21 +52,31 @@ class ReminderSystem:
             if remind_time <= now < remind_time + timedelta(minutes=1):
                 if cache_key not in self.sent_cache:
                     self._send(lesson, lesson_time)
+                    self._sendGroup(lesson, lesson_time)
                     self.sent_cache.add(cache_key)
+
+    def _sendRAW(self,chat_id,lesson, lesson_time):
+        text = (
+        "⏰ <b>Через 10 хвилин починається урок: </b>\n\n"
+        f"📚{lesson['name']}\n"
+        f"🕒{lesson_time.strftime('%H:%M')}\n"
+        "🔗 Підключення:\n"
+        f"{self.format(lesson['id'],chat_id)}"
+        )
+
+        self.bot.send_message(chat_id, text, parse_mode="HTML")
+
+    def _sendGroup(self, lesson, lesson_time):
+        for group_id in self.groups:
+            try:
+                self._sendRAW(int(group_id), lesson, lesson_time)
+            except Exception as e:
+                print(f"Send failed ({group_id}):", e)
+        
 
     def _send(self, lesson, lesson_time):
         for chat_id_str in self.users:
             try:
-                chat_id = int(chat_id_str)
-
-                text = (
-                "⏰ <b>Через 10 хвилин починається урок: </b>\n\n"
-                f"📚{lesson['name']}\n"
-                f"🕒{lesson_time.strftime('%H:%M')}\n"
-                "🔗 Підключення:\n"
-                f"{self.format(lesson['id'],chat_id)}"
-                )
-
-                self.bot.send_message(chat_id, text, parse_mode="HTML")
+                self._sendRAW(int(chat_id_str), lesson, lesson_time)
             except Exception as e:
-                print(f"Send failed ({chat_id}):", e)
+                print(f"Send failed ({chat_id_str}):", e)
