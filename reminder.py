@@ -1,9 +1,10 @@
 import threading
 import time
+from lessons import weekDay
 from datetime import datetime, timedelta
 
 class ReminderSystem:
-    def __init__(self, bot, database, users, check_interval=60,format_link_lambda=None):
+    def __init__(self, bot, database, mreader, data, check_interval=60,format_link_lambda=None):
         """
         bot        – telebot.TeleBot instance
         database   – DATABASE from lessonHandler
@@ -11,11 +12,14 @@ class ReminderSystem:
         """
         self.bot = bot
         self.database = database
-        self.users = users
+        self.users = data['users']
+        self.groups = data['groups']
         self.check_interval = check_interval
         self.running = False
         self.format = format_link_lambda
         self.sent_cache = set()
+        self.custom_reminders = data['bot_data']['reminders']
+        self.mreader = mreader
 
     def start(self):
         if not self.users:
@@ -30,9 +34,48 @@ class ReminderSystem:
         while self.running:
             try:
                 self._check_lessons()
+                self._check_reminders()
             except Exception as e:
                 print("ReminderSystem error:", e)
             time.sleep(self.check_interval)
+
+    def _sendRAWReminder(self,chat_id,text):
+        if text == "@(homework)":
+            pass
+        else:
+            self.bot.send_message(chat_id, text, parse_mode="HTML")
+
+    def _reminder_sent_all(self,msg):
+        for group_id in self.groups:
+            try:
+                self._sendRAWReminder(int(group_id), msg)
+            except Exception as e:
+                print(f"Send failed ({group_id}):", e)
+        for chat_id_str in self.users:
+            try:
+                self._sendRAWReminder(int(chat_id_str), msg)
+            except Exception as e:
+                print(f"Send failed ({chat_id_str}):", e)
+
+    def _check_reminders(self):
+        now = datetime.now()
+
+        for time_str, reminder in self.custom_reminders.items():
+            reminder_time = datetime.strptime(time_str, "%H:%M").replace(
+                year=now.year,
+                month=now.month,
+                day=now.day
+            )
+            if weekDay(reminder_time) in reminder['exclude']:
+                return
+
+            remind_time = reminder_time - timedelta(minutes=10)
+            cache_key = f"REMINDER_{reminder_time}"
+
+            if remind_time <= now < remind_time + timedelta(minutes=1):
+                if cache_key not in self.sent_cache:
+                    self._reminder_sent_all(reminder['text'])
+                    self.sent_cache.add(cache_key)
 
     def _check_lessons(self):
         now = datetime.now()
