@@ -2,24 +2,31 @@ import threading
 import time
 from lessons import weekDay
 from datetime import datetime, timedelta
+from fakeMessage import *
+#from main import format_link,getUserAcc,BulkSendMessage
+
+REMINDER_WINDOW = 5
+LESSON_WINDOW = 5
 
 class ReminderSystem:
-    def __init__(self, bot, database, mreader, data, check_interval=60,format_link_lambda=None):
+    def __init__(self, database, mreader, data, check_interval=60,main_ref=None):
         """
         bot        – telebot.TeleBot instance
         database   – DATABASE from lessonHandler
         users      – list of chat_ids from config.json
         """
-        self.bot = bot
         self.database = database
         self.users = data['users']
         self.groups = data['groups']
         self.check_interval = check_interval
         self.running = False
-        self.format = format_link_lambda
         self.sent_cache = set()
         self.custom_reminders = data['bot_data']['reminders']
         self.mreader = mreader
+        self._GLOBALS_ = main_ref
+
+    def _SEND_REAL(self,chat_id,text):
+        self._GLOBALS_["BulkSendMessage"](chat_id, text,None,"HTML")
 
     def start(self):
         if not self.users:
@@ -40,10 +47,11 @@ class ReminderSystem:
             time.sleep(self.check_interval)
 
     def _sendRAWReminder(self,chat_id,text):
-        if text == "@(homework)":
-            pass
+        if self._GLOBALS_["get_regexed"](text):
+            MSG = FMfromRaw(chat_id,text)
+            self._GLOBALS_["flexibleReader"](MSG)
         else:
-            self.bot.send_message(chat_id, text, parse_mode="HTML")
+            self._SEND_REAL(chat_id, text)
 
     def _reminder_sent_all(self,msg):
         for group_id in self.groups:
@@ -72,7 +80,7 @@ class ReminderSystem:
             remind_time = reminder_time - timedelta(minutes=10)
             cache_key = f"REMINDER_{reminder_time}"
 
-            if remind_time <= now < remind_time + timedelta(minutes=1):
+            if remind_time <= now < remind_time + timedelta(minutes=REMINDER_WINDOW):
                 if cache_key not in self.sent_cache:
                     self._reminder_sent_all(reminder['text'])
                     self.sent_cache.add(cache_key)
@@ -89,25 +97,25 @@ class ReminderSystem:
                 day=now.day
             )
 
-            remind_time = lesson_time - timedelta(minutes=10)
-            cache_key = f"{lesson['id']}_{lesson_time}"
+        remind_time = lesson_time - timedelta(minutes=10)
+        cache_key = f"{lesson['id']}_{lesson_time.strftime('%Y-%m-%d %H:%M')}"
 
-            if remind_time <= now < remind_time + timedelta(minutes=1):
-                if cache_key not in self.sent_cache:
-                    self._send(lesson, lesson_time)
-                    self._sendGroup(lesson, lesson_time)
-                    self.sent_cache.add(cache_key)
+        if remind_time <= now < lesson_time + timedelta(minutes=LESSON_WINDOW):
+            if cache_key not in self.sent_cache:
+                self._send(lesson, lesson_time)
+                self._sendGroup(lesson, lesson_time)
+                self.sent_cache.add(cache_key)
 
     def _sendRAW(self,chat_id,lesson, lesson_time):
+        formatted = self._GLOBALS_["format_link"](lesson['id'],self._GLOBALS_["getUserAcc"](chat_id))
         text = (
         "⏰ <b>Через 10 хвилин починається урок: </b>\n\n"
         f"📚{lesson['name']}\n"
         f"🕒{lesson_time.strftime('%H:%M')}\n"
         "🔗 Підключення:\n"
-        f"{self.format(lesson['id'],chat_id)}"
+        f"{formatted}"
         )
-
-        self.bot.send_message(chat_id, text, parse_mode="HTML")
+        self._SEND_REAL(chat_id, text)
 
     def _sendGroup(self, lesson, lesson_time):
         for group_id in self.groups:

@@ -39,7 +39,11 @@
         "reminders": {
             "8:00": {
                 "exclude": [],
-                "text": "@(homework)"
+                "text": "@(5:!n)"
+            },
+            "14:50": {
+                "exclude": [],
+                "text": "@(5:!n+)"
             }
         }
     }

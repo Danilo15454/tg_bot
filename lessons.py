@@ -121,6 +121,15 @@ class lessonHandler:
         week_num = getWeek(now)
         return self.getSchedule(week_num,now,True)
     
+    def has_lesson(self,week:int,day:int,lid:int) -> tuple[bool,str]:
+        target_day = self.getSchedule(week,day)
+        target_name = self.lessons_names.get(lid)
+        if target_name is not None:
+            for lesson in target_day.values():
+                if lesson['name'] == target_name:
+                    return True,lesson['name']
+        return False,""
+    
     def getSchedule(self,week_num:int,day,edited:bool=True):
         day_name = weekDay(day)
         if edited:

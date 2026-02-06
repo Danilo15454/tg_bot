@@ -9,6 +9,7 @@ class MoodleHandler:
     FETCH_FAIL = "Не вдалося загрузити матеріал."
     KEY_ERROR = "Неправильний ключ або формат ключа."
     CACHE_DURATION = timedelta(minutes=10)
+    NO_LESSONS = "<i>Немає нічого на цей день.</i>"
 
     def __init__(self, key: str):
         parts = key.split(":", 1)
@@ -139,7 +140,7 @@ class MoodleHandler:
         events = soup.select("div.event, div.calendar_event, div.calendar-event")
 
         if not events:
-            return "<i>Немає нічого на цей день.</i>"
+            return self.NO_LESSONS
 
         result = []
         for e in events:
@@ -185,9 +186,8 @@ class MoodleHandler:
 
             link_tag = e.select_one(".card-footer a, .card-link")
             link_html = f"<a href='{link_tag['href']}'>Перейти к елементу курсу</a>" if link_tag and link_tag.has_attr("href") else ""
-
             parts = [desc_html, course_html, group_html, link_html]
-            event_html += "\n" + "\n".join([p for p in parts if p])
+            event_html += f" ({date.day})\n" + "\n".join([p for p in parts if p])
             result.append(event_html)
 
         return "\n\n".join(result)

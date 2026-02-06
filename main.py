@@ -9,14 +9,24 @@ from schedule import scheduleCore
 from lessons import format_link, lessonHandler, getWeek, weekDay
 from reminder import ReminderSystem
 from scheduleChange import lessonReschedulerHandler
-import os
+from fakeMessage import *
+import os, sys
 import re
 import json
 from dotenv import load_dotenv
 from enum import Enum
+
+LOCK_FILE = "bot.lock"
+if os.path.exists(LOCK_FILE):
+    #print("⚠️ Another bot instance is already running!")
+    sys.exit()
+else:
+    open(LOCK_FILE, "w").close()
+
 load_dotenv()
 data = {}
 FLEXIBLE_SUB = {}
+RUNNING = False
 #
 # DATA HANDLING
 #
@@ -53,11 +63,16 @@ BOT_ID = bot.get_me().id
 SCHEDULE = scheduleCore(data["bot_data"]["sheet"]).maplike()
 DATABASE = lessonHandler(data["bot_data"]["schedule"]["subjects"],data["bot_data"]["schedule"]["weeks"],SCHEDULE)
 MOODLE = MoodleHandler(os.getenv("MOODLE"))
-REMINDER = ReminderSystem(bot, DATABASE, MOODLE, data,60,lambda x, y: format_link(x, getUserAcc(y)))
+REMINDER = ReminderSystem(DATABASE, MOODLE, data,60,globals())
 RESCHEDULER = lessonReschedulerHandler(data["scheduled"],push)
 DATABASE.setChanger(RESCHEDULER)
 DATABASE.load()
-REMINDER.start()
+
+def BulkSendMessage(chat_id, text, reply_markup=None, parse_mode="HTML"):
+    try:
+        bot.send_message(chat_id, text, reply_markup=reply_markup, parse_mode=parse_mode)
+    except Exception as e:
+        print(f"⚠️ Could not send to {chat_id}: {e}")
 
 class BASIC_MESSAGE(str, Enum):
     NO_ACCESS = "❌ <b>У тебе немає прав на цю команду</b>"
@@ -65,15 +80,46 @@ class BASIC_MESSAGE(str, Enum):
     ALR_SUBBED = "✅ <b>Ви вже підписані на нагадування</b>"
 
 FLEX_SUB_INTERACTION_REGEX = r"@\((.*?)\)"
+DATE_BY_STR_FORMAT_INDEX = "!"
+
+def get_regexed(txt):
+    return re.search(FLEX_SUB_INTERACTION_REGEX, txt)
+
+def dateBySTR(txt:str) -> datetime:
+    if txt[0] != DATE_BY_STR_FORMAT_INDEX:
+        return
+
+    d = datetime.now()
+    r = txt[2:] if len(txt) > 1 else ""
+    match txt[1]:
+        case "n":
+            pass
+        case "w":
+            d -= timedelta(days=datetime.now().weekday())
+        case "l":
+            DAY = int(r)
+            d = datetime(d.year,d.month,DAY)
+            return d
+    
+    for s in r:
+        match s:
+            case "+":
+                d += timedelta(days=1)
+            case "-":
+                d -= timedelta(days=1)
+
+    return d
 
 class FLEX_SUB_INTERACTION(int, Enum):
+    NONE = -1,
     DAY_CHOICE = 0,
     EDIT_CHEDULE = 1,
     CHECK_DAY = 2,
     EDIT_LESSON = 3,
     ADD_LESSON = 4,
     GET_HOMEWORK_LINK = 5,
-    DEV_HELP = 6
+    DEV_HELP = 6,
+    FIND_LESSON = 7
     
 def flexSub(type_index, admin_only: bool = True, dev_only: bool = False):
     def decorator(func):
@@ -96,7 +142,7 @@ def flexSub(type_index, admin_only: bool = True, dev_only: bool = False):
 #
 @bot.message_handler(func = lambda message: bool(re.search(FLEX_SUB_INTERACTION_REGEX, message.text)))
 def flexibleReader(message):
-    match = re.search(FLEX_SUB_INTERACTION_REGEX, message.text)
+    match = get_regexed(message.text)
     if match:
         content = match.group(1).strip()
         parts = content.split(":", 1)
@@ -104,47 +150,41 @@ def flexibleReader(message):
         values = parts[1].strip() if len(parts) > 1 else ""
         handler = FLEXIBLE_SUB.get(int(type_index))
         if handler:
-            handler(message, values.split(",") if values else [])
-        else:
+            tbl = values.split(",") if values else []
+            for i,s in enumerate(tbl):
+                n = dateBySTR(s)
+                tbl[i] = str(n.day) if n is not None else s
+            handler(message, tbl)
+        elif message.reply_to_message:
             bot.reply_to(message, f"Unknown type OR missing function for type {type_index}", parse_mode="HTML")
 
 @bot.callback_query_handler(func=lambda call: True)
 def all_callback_handler(call):
     match = re.search(FLEX_SUB_INTERACTION_REGEX, call.data)
     if match:
-        class FakeMessage:
-            def __init__(self, call):
-                self.chat = call.message.chat
-                self.from_user = call.from_user
-                self.text = call.data
-                self.message_id = call.message.message_id
-                self.reply_to_message = call.message
-
-        fake_message = FakeMessage(call)
+        fake_message = FMfromCall(call)
         flexibleReader(fake_message)
         bot.answer_callback_query(call.id)
 #
 # SUB FUNCTIONS
 #
 @flexSub(FLEX_SUB_INTERACTION.DAY_CHOICE,False)
-def dayChooseMSG(message, DATA):
+def dayChooseMSG(message, DATA, format_override:list=None, rows:int = 4):
     if len(DATA) == 0:
         return
+    if format_override is not None:
+        if len(format_override) != 2:
+            return
     bot.send_message(message.chat.id, "Це може заняти декілька секунд.")
     now = datetime.now()
     year, month = now.year, now.month
     days_in_month = calendar.monthrange(year, month)[1]
 
-    text = (
-        "Оберіть день:\n"
-        "🟥 - Сьогодні, 🟨 - Ця неділя, 🟩 - Вихідні\n"
-        "★ - Змінено, ❗ - Є якісь завдання"
-    )
     start_week = now - timedelta(days=now.weekday())
     end_week = start_week + timedelta(days=6)
 
-    def format_day(day):
-        date = datetime(year, month, day)
+    def format_day(y,m,day):
+        date = datetime(y, m, day)
         changed = RESCHEDULER.isChanged(day)
         if date.date() == now.date():
             symbol = "🟥"
@@ -155,18 +195,27 @@ def dayChooseMSG(message, DATA):
         mark = "★" if changed else ""
         busy = "?" if MOODLE.key_error else ( "❗" if MOODLE.has_lessons(date) else "" )
         return f"{symbol}{mark}{busy} {day}"
+    
+    text = (
+        "Оберіть день:\n"
+        "🟥 - Сьогодні, 🟨 - Ця неділя, 🟩 - Вихідні\n"
+        "★ - Змінено, ❗ - Є якісь завдання"
+    )
 
-    markup = types.InlineKeyboardMarkup(row_width=4)
+    format_override = format_override or [format_day,text]
+    #TARGET = str(dateBySTR(DATA[0]).day) or DATA[0]
+
+    markup = types.InlineKeyboardMarkup(row_width=rows)
     buttons = [
         types.InlineKeyboardButton(
-            text=format_day(day),
-            callback_data=f"@({DATA[0]}:{day})"
+            text=format_override[0](year,month,day),
+            callback_data=f"@({DATA[0]}:!l{day})"
         )
         for day in range(1, days_in_month + 1)
     ]
 
     markup.add(*buttons)
-    bot.send_message(message.chat.id, text, reply_markup=markup)
+    bot.send_message(message.chat.id, format_override[1], reply_markup=markup)
 
 @flexSub(FLEX_SUB_INTERACTION.EDIT_CHEDULE)
 def change_lesson_flex(message, DATA):
@@ -210,12 +259,37 @@ def change_lesson_flex(message, DATA):
         ))
         bot.send_message(message.chat.id, text, reply_markup=markup)
 
+@flexSub(FLEX_SUB_INTERACTION.NONE,False)
+def _flex_none(message, DATA):
+    pass
+
+@flexSub(FLEX_SUB_INTERACTION.FIND_LESSON,False)
+def find_lessons(message, DATA):
+    if len(DATA) != 1:
+        return
+    LESSON_ID = int(DATA[0]) + 1
+    lesson_name = DATABASE.lessons_names.get(LESSON_ID)
+
+    def format(y,m,d):
+        date = datetime(y, m, d)
+        has_lesson,ln = DATABASE.has_lesson(getWeek(date),date,LESSON_ID) 
+        has = "🟩" if has_lesson else "🟥"
+        return f"{has} {d}"
+
+    txt = (
+        f"Дні коли є {lesson_name}\n"
+        "🟩 - Є урок, 🟥 - Немає урока"
+    )
+
+    dayChooseMSG(message,["-1"],[format,txt],6)
+
 @flexSub(FLEX_SUB_INTERACTION.GET_HOMEWORK_LINK,False)
 def get_homework_link_flex(message, DATA):
     if len(DATA) == 1:
         day = int(DATA[0])
         now = datetime.now()
         date = datetime(now.year, now.month, day)
+
         if MOODLE.has_lessons(date):
             txt = MOODLE.day_lessons(date)
             markup = types.InlineKeyboardMarkup(row_width=1)
@@ -300,18 +374,6 @@ def admin_command(message,func):
         func(message)
     else:
         bot.send_message(message.chat.id, BASIC_MESSAGE.NO_ACCESS,parse_mode="HTML")
-
-
-#@bot.message_handler(func=lambda message: message.text == "Змінити графік @(6:0)")
-#def scheduleDay(message):
-#    admin_command(message, lambda msg:
-#        bot.send_message(message.chat.id, f"", reply_markup=admin_keyboard(), parse_mode="HTML" ))
-    # def schedule_operation(msg):
-    #     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    #     keyboard.add("Додати урок @(6:3)", "Змінити урок @(6:4)", "Видалити урок @(6:5)", "Адмін Панель")
-    #     bot.send_message(message.chat.id, "Оберіть операцію", reply_markup=keyboard, parse_mode="HTML")
-    
-    #admin_command(message, schedule_operation)
 #
 #
 # OTHER
@@ -331,6 +393,19 @@ def start(message):
     )
     bot.send_message(message.chat.id, text, reply_markup=start_keyboard(is_admin(message.chat.id)), parse_mode="HTML" )
 
+@bot.message_handler(func=lambda message: message.text == "Розклад пар")
+def lessons_keyboard(message):
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    buttons = [
+        types.InlineKeyboardButton(
+            text=DATABASE.lessons_names.get(lid) or "",
+            callback_data=f"@(7:{lid - 1})"
+        )
+        for lid in DATABASE.lessons_ids.keys()
+    ]
+    markup.add(*buttons)
+    bot.send_message(message.chat.id, "Виберіть предмет для перегляду", reply_markup=markup, parse_mode="HTML" )
+
 # Розклад на сьогодні
 @bot.message_handler(func=lambda message: message.text == "Розклад на сьогодні")
 def scheduleToday(message):
@@ -349,16 +424,16 @@ def offerHomeworkView(date):
     start_of_day = datetime(date.year, date.month, date.day)
     markup = types.InlineKeyboardMarkup(row_width=1)
     if MOODLE.has_lessons(start_of_day):
-        markup.add(types.InlineKeyboardButton(text="Домашне Завдання",callback_data=f"@(5:{start_of_day.day})"))
+        markup.add(types.InlineKeyboardButton(text="Домашне Завдання",callback_data=f"@(5:!l{start_of_day.day})"))
         return markup
 
 # Розклад на день
-@bot.message_handler(func=lambda message: message.text == "Розклад на день")
+@bot.message_handler(func=lambda message: message.text == "Розклад")
 def scheduleDay(message):
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     date = datetime.now()
     ws = (date - timedelta(days=date.weekday())).day
-    keyboard.add(f"ПН @(2:{ws})", f"ВТ @(2:{ws+1})", f"СР @(2:{ws+2})", f"ЧТ @(2:{ws+3})", f"ПТ @(2:{ws+4})", "Календар @(0:2)", "Назад")
+    keyboard.add(f"ПН @(2:{ws})", f"ВТ @(2:{ws+1})", f"СР @(2:{ws+2})", f"ЧТ @(2:{ws+3})", f"ПТ @(2:{ws+4})", "Календар @(0:2)", "Розклад пар", "Назад")
     bot.send_message(message.chat.id, "Виберіть день", reply_markup=keyboard)
 
 # @bot.message_handler(func=lambda message: message.text == "ПН")
@@ -408,7 +483,7 @@ def scheduleDay(message):
     if str(chat_id) in data["users"]:
         bot.send_message(chat_id, BASIC_MESSAGE.ALR_SUBBED, reply_markup=start_keyboard(is_admin(chat_id)), parse_mode="HTML" )
     else:
-        bot.send_message(chat_id, "Ви підписалися на напоминання", reply_markup=start_keyboard(), parse_mode="HTML" )
+        bot.send_message(chat_id, "Ви підписалися на напоминання", reply_markup=start_keyboard(is_admin(chat_id)), parse_mode="HTML" )
         data["users"][str(chat_id)] = {
             "name":f"{message.from_user.username}","account":0
         }
@@ -474,7 +549,7 @@ def admin_keyboard():
 
 def start_keyboard(isAdmin:bool):
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("Розклад на сьогодні", "Розклад на завтра", "Розклад на день")
+    keyboard.add("Розклад на сьогодні", "Розклад на завтра", "Розклад")
     if (isAdmin):
         keyboard.add("Адмін Панель")
     keyboard.add("Інше")
@@ -548,14 +623,15 @@ def left_chat_handler(message):
             data["groups"].remove(chat_id)
             push()
 
-# Запуск бота
 try:
     print("🤖 Бот запущений")
+    REMINDER.start()
     bot.infinity_polling(skip_pending=True)
 except KeyboardInterrupt:
-    print("⛔ Бота зупинено вручну")
+    print("🛑 Бот зупинено вручну")
 finally:
     print("🧹 Завершення роботи...")
     REMINDER.stop()
     MOODLE.close()
     push()
+    os.remove(LOCK_FILE)
