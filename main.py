@@ -7,6 +7,8 @@ from telebot.apihelper import ApiTelegramException
 from moodleReader import MoodleHandler
 from schedule import scheduleCore
 from lessons import format_link, lessonHandler, getWeek, weekDay
+from sirenReader import sirenReminder
+from devInterface import *
 from reminder import ReminderSystem
 from scheduleChange import lessonReschedulerHandler
 from fakeMessage import *
@@ -15,6 +17,7 @@ import re
 import json
 from dotenv import load_dotenv
 from enum import Enum
+import logging
 
 LOCK_FILE = "bot.lock"
 if os.path.exists(LOCK_FILE):
@@ -27,6 +30,7 @@ load_dotenv()
 data = {}
 FLEXIBLE_SUB = {}
 RUNNING = False
+SUPRESS_TIMEOUT = True
 #
 # DATA HANDLING
 #
@@ -65,8 +69,11 @@ DATABASE = lessonHandler(data["bot_data"]["schedule"]["subjects"],data["bot_data
 MOODLE = MoodleHandler(os.getenv("MOODLE"))
 REMINDER = ReminderSystem(DATABASE, MOODLE, data,60,globals())
 RESCHEDULER = lessonReschedulerHandler(data["scheduled"],push)
+SIREN = sirenReminder(data["bot_data"]["citySiren"],os.getenv("ALERTS"))
+INTERACE = TGBotInterface()
 DATABASE.setChanger(RESCHEDULER)
 DATABASE.load()
+#SIREN.getData()
 
 def BulkSendMessage(chat_id, text, reply_markup=None, parse_mode="HTML"):
     try:
@@ -623,15 +630,21 @@ def left_chat_handler(message):
             data["groups"].remove(chat_id)
             push()
 
-try:
-    print("🤖 Бот запущений")
-    REMINDER.start()
-    bot.infinity_polling(skip_pending=True)
-except KeyboardInterrupt:
-    print("🛑 Бот зупинено вручну")
-finally:
+def _finallyKILL():
     print("🧹 Завершення роботи...")
     REMINDER.stop()
     MOODLE.close()
     push()
     os.remove(LOCK_FILE)
+
+try:
+    if(SUPRESS_TIMEOUT):
+        logging.getLogger("telebot").setLevel(logging.CRITICAL)
+    print("🤖 Бот запущений")
+    REMINDER.start()
+    #INTERACE.start(_finallyKILL)
+    bot.infinity_polling(skip_pending=True)
+except KeyboardInterrupt:
+    print("🛑 Бот зупинено вручну")
+finally:
+    _finallyKILL()

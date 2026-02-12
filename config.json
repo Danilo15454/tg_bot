@@ -15,6 +15,18 @@
         "1425550873": {
             "name": "marmiixx",
             "account": 0
+        },
+        "5504319061": {
+            "name": "yergentin",
+            "account": 0
+        },
+        "1517216754": {
+            "name": "XeNoTh",
+            "account": 0
+        },
+        "5727267154": {
+            "name": "Kira_twinkle",
+            "account": 0
         }
     },
     "admins": [
@@ -29,13 +41,19 @@
         1917919227,
         5272371081
     ],
-    "scheduled": {},
+    "scheduled": {
+        "9": {
+            "13:20": "-1",
+            "13:00": "6"
+        }
+    },
     "bot_data": {
         "sheet": "https://docs.google.com/spreadsheets/d/1Kd1MBIkr9AlfbhB3tZynjG4VfK8sGSX0Pla60DF0A_I/export?format=csv&gid=1091222058",
         "schedule": {
             "subjects": 10,
             "weeks": 2
         },
+        "citySiren":"Dnipro",
         "reminders": {
             "8:00": {
                 "exclude": [],

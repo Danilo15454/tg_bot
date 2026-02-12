@@ -74,10 +74,11 @@ class ReminderSystem:
                 month=now.month,
                 day=now.day
             )
-            if weekDay(reminder_time) in reminder['exclude']:
-                return
 
             remind_time = reminder_time - timedelta(minutes=10)
+            if weekDay(remind_time) in reminder['exclude']:
+                continue
+
             cache_key = f"REMINDER_{reminder_time}"
 
             if remind_time <= now < remind_time + timedelta(minutes=REMINDER_WINDOW):
@@ -97,14 +98,14 @@ class ReminderSystem:
                 day=now.day
             )
 
-        remind_time = lesson_time - timedelta(minutes=10)
-        cache_key = f"{lesson['id']}_{lesson_time.strftime('%Y-%m-%d %H:%M')}"
+            remind_time = lesson_time - timedelta(minutes=10)
+            cache_key = f"{lesson['id']}_{lesson_time.strftime('%Y-%m-%d %H:%M')}"
 
-        if remind_time <= now < lesson_time + timedelta(minutes=LESSON_WINDOW):
-            if cache_key not in self.sent_cache:
-                self._send(lesson, lesson_time)
-                self._sendGroup(lesson, lesson_time)
-                self.sent_cache.add(cache_key)
+            if remind_time <= now < lesson_time + timedelta(minutes=LESSON_WINDOW):
+                if cache_key not in self.sent_cache:
+                    self._send(lesson, lesson_time)
+                    self._sendGroup(lesson, lesson_time)
+                    self.sent_cache.add(cache_key)
 
     def _sendRAW(self,chat_id,lesson, lesson_time):
         formatted = self._GLOBALS_["format_link"](lesson['id'],self._GLOBALS_["getUserAcc"](chat_id))
