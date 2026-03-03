@@ -17,6 +17,7 @@ import re
 import json
 from dotenv import load_dotenv
 from enum import Enum
+import random
 import logging
 
 LOCK_FILE = "bot.lock"
@@ -532,6 +533,30 @@ def scheduleDay(message):
     )
     bot.send_message(message.chat.id, txt,
     parse_mode="HTML")
+
+
+@bot.message_handler(func=lambda message: message.text == "pusheen")
+def catImage(message):
+    folder_path = os.path.join(os.getcwd(), "pusheen")
+
+    # Get all image files from folder
+    images = [f for f in os.listdir(folder_path)
+              if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))]
+
+    if not images:
+        bot.send_message(message.chat.id, "No images found.")
+        return
+
+    random_image = random.choice(images)
+    image_path = os.path.join(folder_path, random_image)
+
+    with open(image_path, "rb") as photo:
+        bot.send_photo(message.chat.id, photo)
+
+@bot.message_handler(func=lambda message: message.text == "а кому щяс легко")
+def catImage(message):
+    with open("images/legko.png", "rb") as photo:
+        bot.send_photo(message.chat.id, photo)
 
 def process_google_acc(message):
     try:
