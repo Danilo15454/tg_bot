@@ -3,15 +3,16 @@ import copy
 import telebot
 from datetime import datetime, timedelta
 from telebot import types
+
 from telebot.apihelper import ApiTelegramException
-from moodleReader import MoodleHandler
-from schedule import scheduleCore
-from lessons import format_link, lessonHandler, getWeek, weekDay
-from sirenReader import sirenReminder
-from devInterface import *
-from reminder import ReminderSystem
-from scheduleChange import lessonReschedulerHandler
-from fakeMessage import *
+from educationCore.moodleReader import MoodleHandler
+from educationCore.schedule import scheduleCore
+from educationCore.lessons import format_link, lessonHandler, getWeek, weekDay
+from educationCore.sirenReader import sirenReminder
+from educationCore.devInterface import *
+from educationCore.reminder import ReminderSystem
+from educationCore.scheduleChange import lessonReschedulerHandler
+from educationCore.fakeMessage import *
 import os, sys
 import re
 import json
@@ -19,10 +20,10 @@ from dotenv import load_dotenv
 from enum import Enum
 import random
 import logging
+from difflib import SequenceMatcher
 
 LOCK_FILE = "bot.lock"
 if os.path.exists(LOCK_FILE):
-    #print("⚠️ Another bot instance is already running!")
     sys.exit()
 else:
     open(LOCK_FILE, "w").close()
@@ -50,6 +51,9 @@ def push(DATA=None,TYPE:str="NONE"):
 
 def getUserAcc(chat_id):
     return data["users"].get(str(chat_id), {"account": 0})["account"]
+
+def is_group(chat_id): 
+    return int(chat_id) < 0
 
 def is_admin(user_id):
     pop()
@@ -211,7 +215,6 @@ def dayChooseMSG(message, DATA, format_override:list=None, rows:int = 4):
     )
 
     format_override = format_override or [format_day,text]
-    #TARGET = str(dateBySTR(DATA[0]).day) or DATA[0]
 
     markup = types.InlineKeyboardMarkup(row_width=rows)
     buttons = [
@@ -399,7 +402,7 @@ def start(message):
     "• ⏰ отримувати нагадування перед початком занять\n\n"
     "Користуйтеся командами або кнопками меню 👇"
     )
-    bot.send_message(message.chat.id, text, reply_markup=start_keyboard(is_admin(message.chat.id)), parse_mode="HTML" )
+    bot.send_message(message.chat.id, text, reply_markup=start_keyboard(message), parse_mode="HTML" )
 
 @bot.message_handler(func=lambda message: message.text == "Розклад пар")
 def lessons_keyboard(message):
@@ -438,42 +441,20 @@ def offerHomeworkView(date):
 # Розклад на день
 @bot.message_handler(func=lambda message: message.text == "Розклад")
 def scheduleDay(message):
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard = None
+    if not is_group(message.chat.id):
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     date = datetime.now()
     ws = (date - timedelta(days=date.weekday())).day
     keyboard.add(f"ПН @(2:{ws})", f"ВТ @(2:{ws+1})", f"СР @(2:{ws+2})", f"ЧТ @(2:{ws+3})", f"ПТ @(2:{ws+4})", "Календар @(0:2)", "Розклад пар", "Назад")
     bot.send_message(message.chat.id, "Виберіть день", reply_markup=keyboard)
 
-# @bot.message_handler(func=lambda message: message.text == "ПН")
-# def scheduleDay(message):
-#     bot.send_message(message.chat.id, DATABASE.take_schedule_day("ПН",getUserAcc(message.chat.id)),
-#     parse_mode="HTML")
-
-# @bot.message_handler(func=lambda message: message.text == "ВТ")
-# def scheduleDay(message):
-#     bot.send_message(message.chat.id, DATABASE.take_schedule_day("ВТ",getUserAcc(message.chat.id)),
-#     parse_mode="HTML")
-
-# @bot.message_handler(func=lambda message: message.text == "СР")
-# def scheduleDay(message):
-#     bot.send_message(message.chat.id, DATABASE.take_schedule_day("СР",getUserAcc(message.chat.id)),
-#     parse_mode="HTML")
-    
-# @bot.message_handler(func=lambda message: message.text == "ЧТ")
-# def scheduleDay(message):
-#     bot.send_message(message.chat.id, DATABASE.take_schedule_day("ЧТ",getUserAcc(message.chat.id)),
-#     parse_mode="HTML")
-
-# @bot.message_handler(func=lambda message: message.text == "ПТ")
-# def scheduleDay(message):
-#     bot.send_message(message.chat.id, DATABASE.take_schedule_day("ПТ",getUserAcc(message.chat.id)),
-#     parse_mode="HTML")
-
-
 # Інше
 @bot.message_handler(func=lambda message: message.text == "Інше")
 def scheduleToday(message):
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard = None
+    if not is_group(message.chat.id):
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add("Підписатися на напоминання", "Відписатися від напоминань", "обрати Google акаунт", "Автори", "Назад")
     bot.send_message(message.chat.id, "Виберіть що хочете", reply_markup=keyboard)
 
@@ -489,9 +470,9 @@ def scheduleDay(message):
 def scheduleDay(message):
     chat_id = message.chat.id
     if str(chat_id) in data["users"]:
-        bot.send_message(chat_id, BASIC_MESSAGE.ALR_SUBBED, reply_markup=start_keyboard(is_admin(chat_id)), parse_mode="HTML" )
+        bot.send_message(chat_id, BASIC_MESSAGE.ALR_SUBBED, reply_markup=start_keyboard(message), parse_mode="HTML" )
     else:
-        bot.send_message(chat_id, "Ви підписалися на напоминання", reply_markup=start_keyboard(is_admin(chat_id)), parse_mode="HTML" )
+        bot.send_message(chat_id, "Ви підписалися на напоминання", reply_markup=start_keyboard(message), parse_mode="HTML" )
         data["users"][str(chat_id)] = {
             "name":f"{message.from_user.username}","account":0
         }
@@ -501,21 +482,19 @@ def scheduleDay(message):
 def scheduleDay(message):
     chat_id = str(message.chat.id)
     if chat_id in data["users"]:
-        bot.send_message(message.chat.id, "Ви відписалися на напоминання", reply_markup=start_keyboard(is_admin(message.chat.id)), parse_mode="HTML" )
+        bot.send_message(message.chat.id, "Ви відписалися на напоминання", reply_markup=start_keyboard(message), parse_mode="HTML" )
         data["users"].pop(chat_id, None)
         push()
     else:
-        bot.send_message(message.chat.id, BASIC_MESSAGE.NOT_SUBBED, reply_markup=start_keyboard(is_admin(message.chat.id)), parse_mode="HTML" )
+        bot.send_message(message.chat.id, BASIC_MESSAGE.NOT_SUBBED, reply_markup=start_keyboard(message), parse_mode="HTML" )
 
 @bot.message_handler(func=lambda message: message.text == "обрати Google акаунт")
 def scheduleDay(message):
     if str(message.chat.id) in data["users"]:
-        bot.send_message(message.chat.id, "Напишіть цифру акаунту", reply_markup=start_keyboard(is_admin(message.chat.id)), parse_mode="HTML" ) 
+        bot.send_message(message.chat.id, "Напишіть цифру акаунту", reply_markup=start_keyboard(message), parse_mode="HTML" ) 
         bot.register_next_step_handler(message, process_google_acc)
     else:
-        bot.send_message(message.chat.id, BASIC_MESSAGE.NOT_SUBBED, reply_markup=start_keyboard(is_admin(message.chat.id)), parse_mode="HTML" ) 
-
-    # Зделати вибор акаунта 
+        bot.send_message(message.chat.id, BASIC_MESSAGE.NOT_SUBBED, reply_markup=start_keyboard(message), parse_mode="HTML" ) 
 
 @bot.message_handler(func=lambda message: message.text == "cat")
 def scheduleDay(message):
@@ -537,9 +516,7 @@ def scheduleDay(message):
 
 @bot.message_handler(func=lambda message: message.text == "pusheen")
 def catImage(message):
-    folder_path = os.path.join(os.getcwd(), "pusheen")
-
-    # Get all image files from folder
+    folder_path = os.path.join(os.getcwd(), "media/pusheen")
     images = [f for f in os.listdir(folder_path)
               if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))]
 
@@ -553,9 +530,14 @@ def catImage(message):
     with open(image_path, "rb") as photo:
         bot.send_photo(message.chat.id, photo)
 
-@bot.message_handler(func=lambda message: message.text == "а кому щяс легко")
-def catImage(message):
-    with open("images/legko.png", "rb") as photo:
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()
+
+@bot.message_handler(func=lambda message: similar(
+    str.lower(message.text), "а кому щяс легко") >= 0.75
+)
+def funkyMessage(message):
+    with open("media/legko.png", "rb") as photo:
         bot.send_photo(message.chat.id, photo)
 
 def process_google_acc(message):
@@ -574,17 +556,21 @@ def process_google_acc(message):
     data["users"][str(message.chat.id)]["account"] = number
     push()
 
-def admin_keyboard():
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+def admin_keyboard(message):
+    keyboard = None
+    if not is_group(message.chat.id):
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add("Оголошення", "Змінити графік @(0:1)", "Назад")
     return keyboard
 
-def start_keyboard(isAdmin:bool):
+def start_keyboard(message):
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("Розклад на сьогодні", "Розклад на завтра", "Розклад")
-    if (isAdmin):
+    id = message.chat.id
+    if not is_group(id):
+        keyboard.add("Розклад на сьогодні", "Розклад на завтра", "Розклад")
+    if is_admin(id):
         keyboard.add("Адмін Панель")
-    keyboard.add("Інше")
+        keyboard.add("Інше")
     return keyboard
 
 @bot.message_handler(commands=["announce"])
@@ -626,14 +612,14 @@ def announce(message):
 # назад
 @bot.message_handler(func=lambda message: message.text == "Назад")
 def goback(message):
-    bot.send_message(message.chat.id, "Виберіть що хочете", reply_markup=start_keyboard(is_admin(message.chat.id)), parse_mode="HTML" )
+    bot.send_message(message.chat.id, "Виберіть що хочете", reply_markup=start_keyboard(message), parse_mode="HTML" )
 
 
 
 @bot.message_handler(func=lambda message: message.text == "Адмін Панель")
 def goback(message):
     admin_command(message, lambda msg:
-            bot.send_message(message.chat.id, "Виберіть операцію:", reply_markup=admin_keyboard(), parse_mode="HTML" )
+            bot.send_message(message.chat.id, "Виберіть операцію:", reply_markup=admin_keyboard(message), parse_mode="HTML" )
         )
 
 @bot.message_handler(content_types=["new_chat_members"])

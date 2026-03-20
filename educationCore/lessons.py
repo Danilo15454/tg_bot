@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import copy
-from scheduleChange import lessonReschedulerHandler
+from .scheduleChange import lessonReschedulerHandler
 days_list = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
 DAYS = {"ПН":"B","ВТ":"C","СР":"D","ЧТ":"E","ПТ":"F","СБ":"G","ВС":"H"}
 TIME_CELLS = 4

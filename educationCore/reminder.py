@@ -1,9 +1,8 @@
 import threading
 import time
-from lessons import weekDay
+from .lessons import weekDay
 from datetime import datetime, timedelta
-from fakeMessage import *
-#from main import format_link,getUserAcc,BulkSendMessage
+from .fakeMessage import *
 
 REMINDER_WINDOW = 5
 LESSON_WINDOW = 5
