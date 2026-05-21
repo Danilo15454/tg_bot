@@ -38,7 +38,7 @@ SUPRESS_TIMEOUT = True
 #
 def pop():
     global data
-    with open('config.json', 'r', encoding='utf-8') as f:
+    with open('data/config.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
 pop()
 
@@ -46,7 +46,7 @@ def push(DATA=None,TYPE:str="NONE"):
     if TYPE != "NONE":
         data[TYPE] = DATA
 
-    with open('config.json', 'w', encoding='utf-8') as f:
+    with open('data/config.json', 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 def getUserAcc(chat_id):
@@ -80,11 +80,17 @@ DATABASE.setChanger(RESCHEDULER)
 DATABASE.load()
 #SIREN.getData()
 
+def canWork(chat_id):
+    if data["DEV_MODE"] == True:
+        return is_dev(chat_id);
+    return True;
+
 def BulkSendMessage(chat_id, text, reply_markup=None, parse_mode="HTML"):
-    try:
-        bot.send_message(chat_id, text, reply_markup=reply_markup, parse_mode=parse_mode)
-    except Exception as e:
-        print(f"⚠️ Could not send to {chat_id}: {e}")
+    if canWork(chat_id):
+        try:
+            bot.send_message(chat_id, text, reply_markup=reply_markup, parse_mode=parse_mode)
+        except Exception as e:
+            print(f"⚠️ Could not send to {chat_id}: {e}")
 
 class BASIC_MESSAGE(str, Enum):
     NO_ACCESS = "❌ <b>У тебе немає прав на цю команду</b>"
@@ -136,14 +142,14 @@ class FLEX_SUB_INTERACTION(int, Enum):
 def flexSub(type_index, admin_only: bool = True, dev_only: bool = False):
     def decorator(func):
         def wrapper(message, *args, **kwargs):
-            if admin_only:
-                return admin_command(message, lambda msg: func(msg, *args, **kwargs))
-            elif dev_only:
-                if is_dev(message.chat.id):
+            if canWork(message.chat.id):
+                if admin_only:
+                    return admin_command(message, lambda msg: func(msg, *args, **kwargs))
+                elif dev_only:
+                    if is_dev(message.chat.id):
+                        return func(message, *args, **kwargs)
+                else:
                     return func(message, *args, **kwargs)
-            else:
-                return func(message, *args, **kwargs)
-
         FLEXIBLE_SUB[type_index] = wrapper
         return wrapper
     return decorator
@@ -415,21 +421,24 @@ def lessons_keyboard(message):
         for lid in DATABASE.lessons_ids.keys()
     ]
     markup.add(*buttons)
-    bot.send_message(message.chat.id, "Виберіть предмет для перегляду", reply_markup=markup, parse_mode="HTML" )
+    if canWork(message.chat.id):
+        bot.send_message(message.chat.id, "Виберіть предмет для перегляду", reply_markup=markup, parse_mode="HTML" )
 
 # Розклад на сьогодні
 @bot.message_handler(func=lambda message: message.text == "Розклад на сьогодні")
 def scheduleToday(message):
-    date = datetime.now()
-    bot.send_message(message.chat.id, DATABASE.schedule_today(getUserAcc(message.chat.id)),
-    parse_mode="HTML",reply_markup=offerHomeworkView(date))
+    if canWork(message.chat.id):
+        date = datetime.now()
+        bot.send_message(message.chat.id, DATABASE.schedule_today(getUserAcc(message.chat.id)),
+        parse_mode="HTML",reply_markup=offerHomeworkView(date))
 
 # Розклад на завтра
 @bot.message_handler(func=lambda message: message.text == "Розклад на завтра")
 def scheduleToday(message):
-    date = datetime.now() + timedelta(days=1)
-    bot.send_message(message.chat.id, DATABASE.schedule_tomorrow(getUserAcc(message.chat.id)),
-    parse_mode="HTML",reply_markup=offerHomeworkView(date))
+    if canWork(message.chat.id):
+        date = datetime.now() + timedelta(days=1)
+        bot.send_message(message.chat.id, DATABASE.schedule_tomorrow(getUserAcc(message.chat.id)),
+        parse_mode="HTML",reply_markup=offerHomeworkView(date))
 
 def offerHomeworkView(date):
     start_of_day = datetime(date.year, date.month, date.day)
@@ -441,22 +450,24 @@ def offerHomeworkView(date):
 # Розклад на день
 @bot.message_handler(func=lambda message: message.text == "Розклад")
 def scheduleDay(message):
-    keyboard = None
-    if not is_group(message.chat.id):
-        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    date = datetime.now()
-    ws = (date - timedelta(days=date.weekday())).day
-    keyboard.add(f"ПН @(2:{ws})", f"ВТ @(2:{ws+1})", f"СР @(2:{ws+2})", f"ЧТ @(2:{ws+3})", f"ПТ @(2:{ws+4})", "Календар @(0:2)", "Розклад пар", "Назад")
-    bot.send_message(message.chat.id, "Виберіть день", reply_markup=keyboard)
+    if canWork(message.chat.id):
+        keyboard = None
+        if not is_group(message.chat.id):
+            keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        date = datetime.now()
+        ws = (date - timedelta(days=date.weekday())).day
+        keyboard.add(f"ПН @(2:{ws})", f"ВТ @(2:{ws+1})", f"СР @(2:{ws+2})", f"ЧТ @(2:{ws+3})", f"ПТ @(2:{ws+4})", "Календар @(0:2)", "Розклад пар", "Назад")
+        bot.send_message(message.chat.id, "Виберіть день", reply_markup=keyboard)
 
 # Інше
 @bot.message_handler(func=lambda message: message.text == "Інше")
 def scheduleToday(message):
-    keyboard = None
-    if not is_group(message.chat.id):
-        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("Підписатися на напоминання", "Відписатися від напоминань", "обрати Google акаунт", "Автори", "Назад")
-    bot.send_message(message.chat.id, "Виберіть що хочете", reply_markup=keyboard)
+    if canWork(message.chat.id):
+        keyboard = None
+        if not is_group(message.chat.id):
+            keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            keyboard.add("Підписатися на напоминання", "Відписатися від напоминань", "обрати Google акаунт", "Автори", "Назад")
+        bot.send_message(message.chat.id, "Виберіть що хочете", reply_markup=keyboard)
 
 @bot.message_handler(func=lambda message: message.text == "Автори")
 def scheduleDay(message):
@@ -468,33 +479,36 @@ def scheduleDay(message):
 
 @bot.message_handler(func=lambda message: message.text == "Підписатися на напоминання")
 def scheduleDay(message):
-    chat_id = message.chat.id
-    if str(chat_id) in data["users"]:
-        bot.send_message(chat_id, BASIC_MESSAGE.ALR_SUBBED, reply_markup=start_keyboard(message), parse_mode="HTML" )
-    else:
-        bot.send_message(chat_id, "Ви підписалися на напоминання", reply_markup=start_keyboard(message), parse_mode="HTML" )
-        data["users"][str(chat_id)] = {
-            "name":f"{message.from_user.username}","account":0
-        }
-        push()
+    if canWork(message.chat.id):
+        chat_id = message.chat.id
+        if str(chat_id) in data["users"]:
+            bot.send_message(chat_id, BASIC_MESSAGE.ALR_SUBBED, reply_markup=start_keyboard(message), parse_mode="HTML" )
+        else:
+            bot.send_message(chat_id, "Ви підписалися на напоминання", reply_markup=start_keyboard(message), parse_mode="HTML" )
+            data["users"][str(chat_id)] = {
+                "name":f"{message.from_user.username}","account":0
+            }
+            push()
 
 @bot.message_handler(func=lambda message: message.text == "Відписатися від напоминань")
 def scheduleDay(message):
-    chat_id = str(message.chat.id)
-    if chat_id in data["users"]:
-        bot.send_message(message.chat.id, "Ви відписалися на напоминання", reply_markup=start_keyboard(message), parse_mode="HTML" )
-        data["users"].pop(chat_id, None)
-        push()
-    else:
-        bot.send_message(message.chat.id, BASIC_MESSAGE.NOT_SUBBED, reply_markup=start_keyboard(message), parse_mode="HTML" )
+    if canWork(message.chat.id):
+        chat_id = str(message.chat.id)
+        if chat_id in data["users"]:
+            bot.send_message(message.chat.id, "Ви відписалися на напоминання", reply_markup=start_keyboard(message), parse_mode="HTML" )
+            data["users"].pop(chat_id, None)
+            push()
+        else:
+            bot.send_message(message.chat.id, BASIC_MESSAGE.NOT_SUBBED, reply_markup=start_keyboard(message), parse_mode="HTML" )
 
 @bot.message_handler(func=lambda message: message.text == "обрати Google акаунт")
 def scheduleDay(message):
-    if str(message.chat.id) in data["users"]:
-        bot.send_message(message.chat.id, "Напишіть цифру акаунту", reply_markup=start_keyboard(message), parse_mode="HTML" ) 
-        bot.register_next_step_handler(message, process_google_acc)
-    else:
-        bot.send_message(message.chat.id, BASIC_MESSAGE.NOT_SUBBED, reply_markup=start_keyboard(message), parse_mode="HTML" ) 
+    if canWork(message.chat.id):
+        if str(message.chat.id) in data["users"]:
+            bot.send_message(message.chat.id, "Напишіть цифру акаунту", reply_markup=start_keyboard(message), parse_mode="HTML" ) 
+            bot.register_next_step_handler(message, process_google_acc)
+        else:
+            bot.send_message(message.chat.id, BASIC_MESSAGE.NOT_SUBBED, reply_markup=start_keyboard(message), parse_mode="HTML" ) 
 
 @bot.message_handler(func=lambda message: message.text == "cat")
 def scheduleDay(message):
@@ -516,19 +530,20 @@ def scheduleDay(message):
 
 @bot.message_handler(func=lambda message: message.text == "pusheen")
 def catImage(message):
-    folder_path = os.path.join(os.getcwd(), "media/pusheen")
-    images = [f for f in os.listdir(folder_path)
-              if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))]
+    if canWork(message.chat.id):
+        folder_path = os.path.join(os.getcwd(), "media/pusheen")
+        images = [f for f in os.listdir(folder_path)
+                if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))]
 
-    if not images:
-        bot.send_message(message.chat.id, "No images found.")
-        return
+        if not images:
+            bot.send_message(message.chat.id, "No images found.")
+            return
 
-    random_image = random.choice(images)
-    image_path = os.path.join(folder_path, random_image)
+        random_image = random.choice(images)
+        image_path = os.path.join(folder_path, random_image)
 
-    with open(image_path, "rb") as photo:
-        bot.send_photo(message.chat.id, photo)
+        with open(image_path, "rb") as photo:
+            bot.send_photo(message.chat.id, photo)
 
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
@@ -561,7 +576,18 @@ def admin_keyboard(message):
     if not is_group(message.chat.id):
         keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add("Оголошення", "Змінити графік @(0:1)", "Назад")
+    if is_dev(message.chat.id):
+        keyboard.add("Dev mode")
     return keyboard
+
+@bot.message_handler(func=lambda message: message.text == "Dev mode")
+def scheduleToday(message):
+    if is_dev(message.chat.id):
+        val = data["DEV_MODE"]
+        data["DEV_MODE"] = not val
+        push()
+        bot.send_message(message.chat.id, "Dev mode: " + (val and "Off" or "On"),
+        parse_mode="HTML",reply_markup=admin_keyboard(message))
 
 def start_keyboard(message):
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -575,71 +601,76 @@ def start_keyboard(message):
 
 @bot.message_handler(commands=["announce"])
 def announce(message):
-    if not is_admin(message.from_user.id):
-        bot.reply_to(message, BASIC_MESSAGE.NO_ACCESS, parse_mode="HTML")
-        return
+    if canWork(message.chat.id):
+        if not is_admin(message.from_user.id):
+            bot.reply_to(message, BASIC_MESSAGE.NO_ACCESS, parse_mode="HTML")
+            return
 
-    text = message.text.replace("/announce", "", 1).strip()
-    if not text:
-        bot.reply_to(message, "❗ <b>Напишіть текст оголошення після команди</b>", parse_mode="HTML")
-        return
+        text = message.text.replace("/announce", "", 1).strip()
+        if not text:
+            bot.reply_to(message, "❗ <b>Напишіть текст оголошення після команди</b>", parse_mode="HTML")
+            return
 
-    with open("config.json", "r", encoding="utf-8") as f:
-        users = json.load(f).get("users", [])
+        with open("data/config.json", "r", encoding="utf-8") as f:
+            users = json.load(f).get("users", [])
 
-    sent = 0
-    failed = 0
+        sent = 0
+        failed = 0
 
-    for chat_id in users:
-        try:
-            bot.send_message(
-                chat_id,
-                f"📢 <b>Оголошення:</b>\n\n{text}",
-                parse_mode="HTML"
-            )
-            sent += 1
-        except ApiTelegramException as e:
-            failed += 1
-            print(f"❌ Не надіслано {chat_id}: {e}")
+        for chat_id in users:
+            try:
+                bot.send_message(
+                    chat_id,
+                    f"📢 <b>Оголошення:</b>\n\n{text}",
+                    parse_mode="HTML"
+                )
+                sent += 1
+            except ApiTelegramException as e:
+                failed += 1
+                print(f"❌ Не надіслано {chat_id}: {e}")
 
-    bot.reply_to(
-        message,
-        f"✅ <b>Відправлено:</b> {sent}\n"
-        f"⚠️ <b>Не доставлено:</b> {failed}",
-        parse_mode="HTML"
-    )
+        bot.reply_to(
+            message,
+            f"✅ <b>Відправлено:</b> {sent}\n"
+            f"⚠️ <b>Не доставлено:</b> {failed}",
+            parse_mode="HTML"
+        )
 
 # назад
 @bot.message_handler(func=lambda message: message.text == "Назад")
 def goback(message):
-    bot.send_message(message.chat.id, "Виберіть що хочете", reply_markup=start_keyboard(message), parse_mode="HTML" )
+    if canWork(message.chat.id):
+        bot.send_message(message.chat.id, "Виберіть що хочете", reply_markup=start_keyboard(message), parse_mode="HTML" )
 
 
 
 @bot.message_handler(func=lambda message: message.text == "Адмін Панель")
 def goback(message):
-    admin_command(message, lambda msg:
+    if canWork(message.chat.id):
+       admin_command(message, lambda msg:
             bot.send_message(message.chat.id, "Виберіть операцію:", reply_markup=admin_keyboard(message), parse_mode="HTML" )
         )
 
 @bot.message_handler(content_types=["new_chat_members"])
 def new_chat_member_handler(message):
-    for new_user in message.new_chat_members:
-        if new_user.id == BOT_ID:
-            chat_id = str(message.chat.id)
-            if chat_id not in data["groups"]:
-                data["groups"].append(chat_id)
-                bot.send_message(message.chat.id, "Бот автоматично підписан на группу та буде відправляти нагадування!", parse_mode="HTML" )
-                push()
+    if canWork(message.chat.id):
+        for new_user in message.new_chat_members:
+            if new_user.id == BOT_ID:
+                chat_id = str(message.chat.id)
+                if chat_id not in data["groups"]:
+                    data["groups"].append(chat_id)
+                    bot.send_message(message.chat.id, "Бот автоматично підписан на группу та буде відправляти нагадування!", parse_mode="HTML" )
+                    push()
 
 @bot.message_handler(content_types=["left_chat_member"])
 def left_chat_handler(message):
-    left_user = message.left_chat_member
-    if left_user.id == BOT_ID:
-        chat_id = str(message.chat.id)
-        if chat_id in data["groups"]:
-            data["groups"].remove(chat_id)
-            push()
+    if canWork(message.chat.id):
+        left_user = message.left_chat_member
+        if left_user.id == BOT_ID:
+            chat_id = str(message.chat.id)
+            if chat_id in data["groups"]:
+                data["groups"].remove(chat_id)
+                push()
 
 def _finallyKILL():
     print("🧹 Завершення роботи...")
