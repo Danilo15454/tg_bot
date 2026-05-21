@@ -120,7 +120,9 @@ class ReminderSystem:
         )
         self._SEND_REAL(chat_id, text)
         if (self._isSiren()):
-            self._SEND_REAL(chat_id, "Тревога!!!")
+            self._SEND_REAL(chat_id, "🚨 Тривога!!!")
+        else:
+            self._SEND_REAL(chat_id, "✅ Відбій тривоги")
 
     def _sendGroup(self, lesson, lesson_time):
         for group_id in self.groups:

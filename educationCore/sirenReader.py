@@ -19,7 +19,7 @@ class sirenReminder:
         data = response.json()
 
         for district in data["raw"]["3"]["districts"]:
-            if district["name"] == "Дніпровський район":
+            if district["name"] == "Синельниківський район":
                 print(district["alert"])
                 return district["alert"]
         
