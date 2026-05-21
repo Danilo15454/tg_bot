@@ -27,6 +27,9 @@ class ReminderSystem:
     def _SEND_REAL(self,chat_id,text):
         self._GLOBALS_["BulkSendMessage"](chat_id, text,None,"HTML")
 
+    def _isSiren(self) -> bool:
+        return self._GLOBALS_["SIREN"].cityTake()
+
     def start(self):
         if not self.users:
             print("ReminderSystem: users list is empty")
@@ -116,6 +119,8 @@ class ReminderSystem:
         f"{formatted}"
         )
         self._SEND_REAL(chat_id, text)
+        if (self._isSiren()):
+            self._SEND_REAL(chat_id, "Тревога!!!")
 
     def _sendGroup(self, lesson, lesson_time):
         for group_id in self.groups:
