@@ -1,9 +1,5 @@
 {
     "users": {
-        "1917919227": {
-            "name": "Nebula_Protogen",
-            "account": 1
-        },
         "5272371081": {
             "name": "danilka_kryt",
             "account": 2
@@ -27,12 +23,16 @@
         "5727267154": {
             "name": "Kira_twinkle",
             "account": 0
+        },
+        "1917919227": {
+            "name": "Nebula_Protogen",
+            "account": 1
         }
     },
     "admins": [
         1917919227,
         5272371081,
-        1779087086
+        1302164415
     ],
     "groups": [
         "-1002171650780"
@@ -41,32 +41,15 @@
         1917919227,
         5272371081
     ],
-    "scheduled": {
-        "1": {
-            "13:20": "10"
-        },
-        "8": {
-            "13:20": "-1",
-            "13:00": "10"
-        },
-        "18": {
-            "13:20": "-1",
-            "13:00": "6",
-            "0": "-1"
-        },
-        "15": {
-            "13:20": "-1",
-            "13:00": "8"
-        }
-    },
-    "DEV_MODE": true,
+    "scheduled": {},
+    "DEV_MODE": false,
     "bot_data": {
         "sheet": "https://docs.google.com/spreadsheets/d/1Kd1MBIkr9AlfbhB3tZynjG4VfK8sGSX0Pla60DF0A_I/export?format=csv&gid=1091222058",
         "schedule": {
-            "subjects": 10,
+            "subjects": 7,
             "weeks": 2
         },
-        "citySiren": "Dnipro",
+        "citySiren": "Дніпровський район",
         "reminders": {
             "8:00": {
                 "exclude": [],

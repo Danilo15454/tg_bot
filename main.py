@@ -72,7 +72,7 @@ BOT_ID = bot.get_me().id
 SCHEDULE = scheduleCore(data["bot_data"]["sheet"]).maplike()
 DATABASE = lessonHandler(data["bot_data"]["schedule"]["subjects"],data["bot_data"]["schedule"]["weeks"],SCHEDULE)
 MOODLE = MoodleHandler(os.getenv("MOODLE"))
-SIREN = sirenReminder(data["bot_data"]["citySiren"],os.getenv("ALERTS"))
+SIREN = sirenReminder(data["bot_data"]["citySiren"])
 REMINDER = ReminderSystem(DATABASE, MOODLE, data,60,globals())
 RESCHEDULER = lessonReschedulerHandler(data["scheduled"],push)
 INTERACE = TGBotInterface()
@@ -466,7 +466,7 @@ def scheduleToday(message):
         keyboard = None
         if not is_group(message.chat.id):
             keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-            keyboard.add("Підписатися на напоминання", "Відписатися від напоминань", "обрати Google акаунт", "Автори", "Назад")
+            keyboard.add("Підписатися на напоминання", "Відписатися від напоминань", "обрати Google акаунт", "Автори","Карта", "Назад")
         bot.send_message(message.chat.id, "Виберіть що хочете", reply_markup=keyboard)
 
 @bot.message_handler(func=lambda message: message.text == "Автори")
@@ -530,20 +530,29 @@ def scheduleDay(message):
 
 @bot.message_handler(func=lambda message: message.text == "pusheen")
 def catImage(message):
-    if canWork(message.chat.id):
-        folder_path = os.path.join(os.getcwd(), "media/pusheen")
+    MediaF(message.chat.id,"media/pusheen")
+
+@bot.message_handler(func=lambda message: message.text and message.text.split(maxsplit=1)[0] == "media")
+def ImageRaw(message):
+    args = message.text.split(maxsplit=1)
+    if len(args) > 1:
+        MediaF(message.chat.id, f"media/{args[1]}")
+
+def MediaF(chat_id,inPath):
+    if canWork(chat_id):
+        folder_path = os.path.join(os.getcwd(), inPath)
         images = [f for f in os.listdir(folder_path)
                 if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))]
 
         if not images:
-            bot.send_message(message.chat.id, "No images found.")
+            bot.send_message(chat_id, "No images found.")
             return
 
         random_image = random.choice(images)
         image_path = os.path.join(folder_path, random_image)
 
         with open(image_path, "rb") as photo:
-            bot.send_photo(message.chat.id, photo)
+            bot.send_photo(chat_id, photo)
 
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
@@ -552,8 +561,7 @@ def similar(a, b):
     str.lower(message.text), "а кому щяс легко") >= 0.75
 )
 def funkyMessage(message):
-    with open("media/legko.png", "rb") as photo:
-        bot.send_photo(message.chat.id, photo)
+    MediaF(message.chat.id,"media/legko")
 
 def process_google_acc(message):
     try:
@@ -589,6 +597,22 @@ def scheduleToday(message):
         bot.send_message(message.chat.id, "Dev mode: " + (val and "Off" or "On"),
         parse_mode="HTML",reply_markup=admin_keyboard(message))
 
+@bot.message_handler(func=lambda message: message.text == "Карта")
+def getMap(message):
+    try:
+        map_image = SIREN.getMap()
+        bot.send_photo(message.chat.id,map_image,caption="Карта повітряних тривог")
+    except SIREN.requests.RequestException as e:
+        bot.send_message(message.chat.id,f"Не вдалося отримати карту: {e}",reply_markup=start_keyboard(message))
+
+@bot.message_handler(func=lambda message: message.text == "/id")
+def getId(message):
+    bot.send_message(message.chat.id,f"Айді чата: {message.chat.id}",reply_markup=start_keyboard(message))
+
+@bot.message_handler(func=lambda message: message.text == "!тривога")
+def getSirenStatus(message):
+    REMINDER.getSirenStatus(message.chat.id)
+
 def start_keyboard(message):
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     id = message.chat.id
@@ -596,7 +620,7 @@ def start_keyboard(message):
         keyboard.add("Розклад на сьогодні", "Розклад на завтра", "Розклад")
     if is_admin(id):
         keyboard.add("Адмін Панель")
-        keyboard.add("Інше")
+    keyboard.add("Інше")
     return keyboard
 
 @bot.message_handler(commands=["announce"])
@@ -642,8 +666,6 @@ def goback(message):
     if canWork(message.chat.id):
         bot.send_message(message.chat.id, "Виберіть що хочете", reply_markup=start_keyboard(message), parse_mode="HTML" )
 
-
-
 @bot.message_handler(func=lambda message: message.text == "Адмін Панель")
 def goback(message):
     if canWork(message.chat.id):
@@ -653,24 +675,35 @@ def goback(message):
 
 @bot.message_handler(content_types=["new_chat_members"])
 def new_chat_member_handler(message):
-    if canWork(message.chat.id):
-        for new_user in message.new_chat_members:
-            if new_user.id == BOT_ID:
-                chat_id = str(message.chat.id)
-                if chat_id not in data["groups"]:
-                    data["groups"].append(chat_id)
-                    bot.send_message(message.chat.id, "Бот автоматично підписан на группу та буде відправляти нагадування!", parse_mode="HTML" )
-                    push()
+    for new_user in message.new_chat_members:
+        if new_user.id == BOT_ID:
+            chat_id = str(message.chat.id)
+            if chat_id not in data["groups"]:
+                data["groups"].append(chat_id)
+                bot.send_message(message.chat.id, "Бот автоматично підписан на группу та буде відправляти нагадування!", parse_mode="HTML" )
+                push()
 
 @bot.message_handler(content_types=["left_chat_member"])
 def left_chat_handler(message):
-    if canWork(message.chat.id):
-        left_user = message.left_chat_member
-        if left_user.id == BOT_ID:
-            chat_id = str(message.chat.id)
-            if chat_id in data["groups"]:
-                data["groups"].remove(chat_id)
-                push()
+    left_user = message.left_chat_member
+    if left_user.id == BOT_ID:
+        chat_id = str(message.chat.id)
+        if chat_id in data["groups"]:
+            data["groups"].remove(chat_id)
+            push()
+
+@bot.my_chat_member_handler()
+def my_chat_member_handler(update):
+    chat_id = str(update.chat.id)
+    new_status = update.new_chat_member.status
+    if new_status in ("left", "kicked"):
+        if chat_id in data["groups"]:
+            data["groups"].remove(chat_id)
+            push()
+    elif new_status in ("member", "administrator"):
+        if chat_id not in data["groups"]:
+            data["groups"].append(chat_id)
+            push()
 
 def _finallyKILL():
     print("🧹 Завершення роботи...")

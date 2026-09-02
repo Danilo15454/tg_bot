@@ -3,9 +3,22 @@ import time
 from .lessons import weekDay
 from datetime import datetime, timedelta
 from .fakeMessage import *
+from enum import Enum
+import re
 
 REMINDER_WINDOW = 5
 LESSON_WINDOW = 5
+
+class SIREN_STATUS(str, Enum):
+    SIREN = "Є тривога"
+    NO_SIREN = "Немає тривоги"
+    SIREN_START = "!Повітряна тривоги!"
+    SIREN_STOP = "!Відбій тривоги!"
+    SIREN_LESSON = "УВАГА! Зараз іде повітряна тривога\n"
+
+def vlen(text):
+    text = re.sub(r"<[^>]+>", "", text)
+    return len(text)
 
 class ReminderSystem:
     def __init__(self, database, mreader, data, check_interval=60,main_ref=None):
@@ -19,6 +32,8 @@ class ReminderSystem:
         self.groups = data['groups']
         self.check_interval = check_interval
         self.running = False
+        self.thereWasAirSiren = False
+        self.airSirenMarkDirty = False
         self.sent_cache = set()
         self.custom_reminders = data['bot_data']['reminders']
         self.mreader = mreader
@@ -44,6 +59,7 @@ class ReminderSystem:
             try:
                 self._check_lessons()
                 self._check_reminders()
+                self._check_siren_end()
             except Exception as e:
                 print("ReminderSystem error:", e)
             time.sleep(self.check_interval)
@@ -109,18 +125,74 @@ class ReminderSystem:
                     self._sendGroup(lesson, lesson_time)
                     self.sent_cache.add(cache_key)
 
-    def _sendRAW(self,chat_id,lesson, lesson_time):
-        formatted = self._GLOBALS_["format_link"](lesson['id'],self._GLOBALS_["getUserAcc"](chat_id))
+    def _check_siren_end(self):
+        now = datetime.now()
+
+        if hasattr(self, "_last_siren_check"):
+            if now - self._last_siren_check < timedelta(seconds=25):
+                return
+        self._last_siren_check = now
+        siren = self._isSiren()
+
+        if not self.airSirenMarkDirty:
+            self.thereWasAirSiren = siren
+            self.airSirenMarkDirty = True
+            print(f"Current air siren status: {'true' if siren else 'false'}")
+            return
+
+        if not self.thereWasAirSiren and siren:
+            self._airSirenMsgAll(SIREN_STATUS.SIREN_START, True)
+            self.thereWasAirSiren = True
+            return
+
+        if self.thereWasAirSiren and not siren:
+            self._airSirenMsgAll(SIREN_STATUS.SIREN_STOP, False)
+            self.thereWasAirSiren = False
+
+    def getSirenStatus(self,chat_id):
+        siren = self._isSiren()
+        self._airSirenMsg(chat_id,SIREN_STATUS.SIREN if siren else SIREN_STATUS.NO_SIREN,siren)
+
+    def _decorSiren(self, length, isSiren):
+        symbol = "═"
+        siren_symbol = "🟥" if isSiren else "🟩"
+        return (symbol + siren_symbol + (symbol * max(0, length - 8)) + siren_symbol + symbol)
+
+    def _airSirenMsgAll(self,TXT,siren):
+            for chat_id_str in self.users:
+                try:
+                    self._airSirenMsg(int(chat_id_str),TXT,siren)
+                except Exception as e:
+                    print(f"Send failed ({chat_id_str}):", e)
+
+    def _airSirenMsg(self,chat_id,TXT,siren):
         text = (
-        "⏰ <b>Через 10 хвилин починається урок: </b>\n\n"
-        f"📚{lesson['name']}\n"
-        f"🕒{lesson_time.strftime('%H:%M')}\n"
-        "🔗 Підключення:\n"
-        f"{formatted}"
+            self._decorSiren(vlen(TXT), siren)
+            + "\n"
+            + TXT
+            + "\n"
+            + self._decorSiren(vlen(TXT), siren)
+        )
+        self._SEND_REAL(chat_id,text)
+
+    def _sendRAW(self, chat_id, lesson, lesson_time):
+        formatted = self._GLOBALS_["format_link"](lesson["id"],self._GLOBALS_["getUserAcc"](chat_id))
+        icon_text = "⏰ <b>Через 10 хвилин починається урок: </b>\n\n"
+        siren = self._isSiren()
+        
+        text = (
+            self._decorSiren(vlen(icon_text), siren)
+            + "\n"
+            + icon_text
+            + f"📚 {lesson['name']}\n"
+            + f"🕒 {lesson_time.strftime('%H:%M')}\n"
+            + "🔗 Підключення:\n"
+            + formatted
+            + "\n"
+            + (SIREN_STATUS.SIREN_LESSON if siren else "")
+            + self._decorSiren(vlen(icon_text), siren)
         )
         self._SEND_REAL(chat_id, text)
-        if (self._isSiren()):
-            self._SEND_REAL(chat_id, "Тревога!!!")
 
     def _sendGroup(self, lesson, lesson_time):
         for group_id in self.groups:
