@@ -22,7 +22,7 @@ class sirenReminder:
 
     def cityTake(self):
         if self._alert_data is None or time.time() - self._alert_data_time >= 60:
-            response = requests.get("https://ubilling.net.ua/aerialalerts/?source=default&raw")
+            response = requests.get("https://ubilling.net.ua/aerialalerts/?source=Klymenko&raw")
             response.raise_for_status()
 
             self._alert_data = response.json()
