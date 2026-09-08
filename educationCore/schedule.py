@@ -33,6 +33,11 @@ class scheduleCore:
         if not self.data:
             self.__load()
 
+    def refresh(self):
+        """Force a fresh pull from the Google Sheet, discarding any cached rows."""
+        self.data = {}
+        self.__load()
+
     def maplike(self):
         self.__ensure_loaded()
         flat_map = {}

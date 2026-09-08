@@ -21,34 +21,26 @@ class sirenReminder:
         return BytesIO(request.content)
 
     def cityTake(self):
-        if (self._alert_data is None or time.time() - self._alert_data_time >= 60):
+        if self._alert_data is None or time.time() - self._alert_data_time >= 60:
             response = requests.get("https://ubilling.net.ua/aerialalerts/?source=default&raw")
             response.raise_for_status()
 
             self._alert_data = response.json()
             self._alert_data_time = time.time()
 
-        def find_alert(obj, name):
-            name_lower = name.lower()
+        root = (
+            self._alert_data.get("raw", self._alert_data)
+            if isinstance(self._alert_data, dict)
+            else self._alert_data
+        )
 
-            if isinstance(obj, dict):
-                for key, value in obj.items():
-                    if isinstance(value, dict) and "enabled" in value:
-                        if name_lower in key.lower():
-                            return value["enabled"]
+        if root.get("3"):
+            for district in root["3"].get("districts", []):
+                if district.get("name") == self.City:
+                    return district.get("alert")
 
-                    result = find_alert(value, name)
-                    if result is not None:
-                        return result
+        city_data = root.get(self.City)
+        if city_data:
+            return city_data.get("enabled")
 
-            elif isinstance(obj, list):
-                for item in obj:
-                    result = find_alert(item, name)
-                    if result is not None:
-                        return result
-
-            return None
-
-        root = self._alert_data.get("raw", self._alert_data) if isinstance(self._alert_data, dict) else self._alert_data
-
-        return find_alert(root, self.City)
+        return False

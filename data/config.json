@@ -59,6 +59,7 @@
                 "exclude": [],
                 "text": "@(5:!n+)"
             }
-        }
+        },
+        "lesson_overrides": {}
     }
 }

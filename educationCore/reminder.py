@@ -164,6 +164,11 @@ class ReminderSystem:
                     self._airSirenMsg(int(chat_id_str),TXT,siren)
                 except Exception as e:
                     print(f"Send failed ({chat_id_str}):", e)
+            for group_id in self.groups:
+                try:
+                    self._airSirenMsg(int(group_id),TXT,siren)
+                except Exception as e:
+                    print(f"Send failed ({group_id}):", e)
 
     def _airSirenMsg(self,chat_id,TXT,siren):
         text = (

@@ -46,7 +46,8 @@ class lessonHandler:
         self.sc_instance = maplike
         self.full_lesson_schedule = {}
         self.changer = None
-    
+        self.overrides_provider = None
+
     def getLessonIds(self,extra:bool=True) -> str:
         text = (
             "Введіть номер уроку:\n"
@@ -56,14 +57,53 @@ class lessonHandler:
             text += "[-1] - Відмінити зміни\n"
             text += "[0] - Видалити урок\n"
 
-        for index,value in enumerate(self.lessons_names.values()):
-            text += f"[{index+1}] - {value}\n"
+        for lid,value in self.lessons_names.items():
+            text += f"[{lid}] - {value}\n"
         return text
 
+    def setOverridesProvider(self, fn):
+        """fn() must return the live dict of manual lesson-link overrides:
+        { "<id>": {"name": str, "code": str} | None }
+        None marks that id as removed/hidden even if the sheet still has it.
+        Ids beyond the sheet's subject count are purely manual (bot-added) lessons."""
+        self.overrides_provider = fn
+
+    def _get_overrides(self) -> dict:
+        if not self.overrides_provider:
+            return {}
+        try:
+            return self.overrides_provider() or {}
+        except Exception:
+            return {}
+
     def load(self):
-        for k in range(self.lesson_count):
-            self.lessons_ids[k+1] = self.sc_instance.get(f"{LESSON_COLUMN}{k+1}")
-            self.lessons_names[k + 1] = self.sc_instance.get(f"{NAME_LESSON_COLUMN}{k+1}")
+        self.lessons_ids = {}
+        self.lessons_names = {}
+        self.full_lesson_schedule = {}
+
+        overrides = self._get_overrides()
+
+        max_id = self.lesson_count
+        for k in overrides.keys():
+            try:
+                ik = int(k)
+            except (TypeError, ValueError):
+                continue
+            if ik > max_id:
+                max_id = ik
+
+        for k in range(1, max_id + 1):
+            key = str(k)
+            if key in overrides:
+                ov = overrides[key]
+                if ov is None:
+                    continue  # tombstoned/removed, hidden even if the sheet still has it
+                self.lessons_ids[k] = ov.get("code", "")
+                self.lessons_names[k] = ov.get("name", "")
+            elif k <= self.lesson_count:
+                self.lessons_ids[k] = self.sc_instance.get(f"{LESSON_COLUMN}{k}")
+                self.lessons_names[k] = self.sc_instance.get(f"{NAME_LESSON_COLUMN}{k}")
+
         for w in range(self.week_count):
             self.full_lesson_schedule[w+1] = self.parseWeek(w)
 

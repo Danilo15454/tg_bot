@@ -62,15 +62,27 @@ def is_admin(user_id):
 def is_dev(user_id):
     pop()
     return user_id in data["devs"]
+
+def get_lesson_overrides():
+    """Live dict of manually-managed lesson links (id -> {name, code} | None-tombstone).
+    Always resolved against the CURRENT global `data` (which can be rebound by pop())."""
+    return data.setdefault("bot_data", {}).setdefault("lesson_overrides", {})
+
+def get_bot_link():
+    custom = (data.get("bot_data", {}).get("custom_bot_link") or "").strip()
+    return custom if custom else f"https://t.me/{BOT_INFO.username}"
 #
 #
 # MAIN BOT LOGIC
 #
 #
 bot = telebot.TeleBot(os.getenv("TOKEN"))
-BOT_ID = bot.get_me().id
-SCHEDULE = scheduleCore(data["bot_data"]["sheet"]).maplike()
+BOT_INFO = bot.get_me()
+BOT_ID = BOT_INFO.id
+SHEET_CORE = scheduleCore(data["bot_data"]["sheet"])
+SCHEDULE = SHEET_CORE.maplike()
 DATABASE = lessonHandler(data["bot_data"]["schedule"]["subjects"],data["bot_data"]["schedule"]["weeks"],SCHEDULE)
+DATABASE.setOverridesProvider(get_lesson_overrides)
 MOODLE = MoodleHandler(os.getenv("MOODLE"))
 SIREN = sirenReminder(data["bot_data"]["citySiren"])
 REMINDER = ReminderSystem(DATABASE, MOODLE, data,60,globals())
@@ -79,6 +91,37 @@ INTERACE = TGBotInterface()
 DATABASE.setChanger(RESCHEDULER)
 DATABASE.load()
 #SIREN.getData()
+
+def reload_schedule():
+    """Force-pulls the sheet again and rebuilds DATABASE off the same SCHEDULE dict (in-place)."""
+    SHEET_CORE.refresh()
+    fresh = SHEET_CORE.maplike()
+    SCHEDULE.clear()
+    SCHEDULE.update(fresh)
+    DATABASE.load()
+    return True
+
+def reload_lessons():
+    """Rebuilds the lesson list & schedule from the already-cached sheet data + manual
+    overrides, WITHOUT hitting the network. Use this after add/edit/remove of a lesson link."""
+    DATABASE.load()
+    return True
+
+INTERACE.bind(
+    bot=bot,
+    bot_username=BOT_INFO.username,
+    get_data=lambda: data,
+    push=push,
+    database=DATABASE,
+    rescheduler=RESCHEDULER,
+    siren=SIREN,
+    reload_schedule=reload_schedule,
+    reload_lessons=reload_lessons,
+    is_admin=is_admin,
+    is_dev=is_dev,
+    get_lesson_overrides=get_lesson_overrides,
+    get_bot_link=get_bot_link,
+)
 
 def canWork(chat_id):
     if data["DEV_MODE"] == True:
@@ -137,7 +180,12 @@ class FLEX_SUB_INTERACTION(int, Enum):
     ADD_LESSON = 4,
     GET_HOMEWORK_LINK = 5,
     DEV_HELP = 6,
-    FIND_LESSON = 7
+    FIND_LESSON = 7,
+    LESSON_LIST = 8,
+    LESSON_ITEM = 9,
+    LESSON_EDIT = 10,
+    LESSON_ADD = 11,
+    LESSON_REMOVE = 12
     
 def flexSub(type_index, admin_only: bool = True, dev_only: bool = False):
     def decorator(func):
@@ -320,7 +368,10 @@ def dev_help(message, Data):
         "* - Required\n"
         ".env\n"
         "TOKEN* = XXXX (BOT token)\n"
-        "MOODLE = 'xxx:xxx' (MOODLE Login)"
+        "MOODLE = 'xxx:xxx' (MOODLE Login)\n\n"
+        "🖥️ Веб-дешборд: data/config.json → bot_data.dashboard.port (порт, треба перезапуск), "
+        "bot_data.dashboard.url (публічне посилання, напр. ngrok/DDNS/домен). "
+        "Докладніше — вкладка «@ Функції» на дешборді."
     )
     bot.send_message(message.chat.id, txt, parse_mode="HTML")
 
@@ -375,6 +426,129 @@ def edit_lesson_flex(message, DATA):
             bot.send_message(message.chat.id, text,parse_mode="HTML")
             bot.register_next_step_handler(message, request)
 
+#
+# LESSON LINK LIBRARY (add / edit / remove @() functions, straight from the bot)
+#
+def _next_lesson_id():
+    ids = list(DATABASE.lessons_names.keys())
+    overrides = get_lesson_overrides()
+    for k in overrides.keys():
+        try:
+            ids.append(int(k))
+        except (TypeError, ValueError):
+            continue
+    return (max(ids) if ids else 0) + 1
+
+@flexSub(FLEX_SUB_INTERACTION.LESSON_LIST)
+def lesson_list_flex(message, DATA):
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    if DATABASE.lessons_names:
+        for lid, name in DATABASE.lessons_names.items():
+            markup.add(types.InlineKeyboardButton(text=f"{lid}. {name or '?'}", callback_data=f"@(9:{lid})"))
+    markup.add(types.InlineKeyboardButton(text="➕ Додати нову пару", callback_data="@(11)"))
+    bot.send_message(
+        message.chat.id,
+        "📚 <b>Список пар</b>\nОберіть пару щоб змінити/видалити код посилання, або додайте нову.",
+        parse_mode="HTML",
+        reply_markup=markup
+    )
+
+@flexSub(FLEX_SUB_INTERACTION.LESSON_ITEM)
+def lesson_item_flex(message, DATA):
+    if len(DATA) == 0:
+        return lesson_list_flex(message, [])
+    lid = int(DATA[0])
+    name = DATABASE.lessons_names.get(lid, "?")
+    code = DATABASE.lessons_ids.get(lid) or "—"
+    txt = f"<b>{lid}. {name}</b>\n🔗 Код посилання: <code>{code}</code>"
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton(text="✏️ Редагувати", callback_data=f"@(10:{lid})"),
+        types.InlineKeyboardButton(text="🗑️ Видалити", callback_data=f"@(12:{lid})"),
+        types.InlineKeyboardButton(text="⬅️ До списку", callback_data="@(8)"),
+    )
+    bot.send_message(message.chat.id, txt, parse_mode="HTML", reply_markup=markup)
+
+@flexSub(FLEX_SUB_INTERACTION.LESSON_EDIT)
+def lesson_edit_flex(message, DATA):
+    if len(DATA) == 0:
+        return
+    lid = int(DATA[0])
+    if lid not in DATABASE.lessons_names:
+        bot.send_message(message.chat.id, "❌ Такої пари вже немає.", parse_mode="HTML")
+        return lesson_list_flex(message, [])
+
+    if len(DATA) == 1:
+        bot.send_message(message.chat.id, f"✏️ Поточна назва: <b>{DATABASE.lessons_names.get(lid)}</b>\nВведіть нову назву пари:", parse_mode="HTML")
+        bot.register_next_step_handler(message, lambda msg: lesson_edit_flex(msg, [lid, msg.text]))
+        return
+
+    if len(DATA) == 2:
+        bot.send_message(
+            message.chat.id,
+            "🔗 Введіть код посилання (Zoom ID або Google Meet код).\n"
+            "Для двох підгруп введіть у форматі <code>код1|код2</code>:",
+            parse_mode="HTML"
+        )
+        bot.register_next_step_handler(message, lambda msg: lesson_edit_flex(msg, [lid, DATA[1], msg.text]))
+        return
+
+    name, code = DATA[1].strip(), DATA[2].strip()
+    overrides = get_lesson_overrides()
+    overrides[str(lid)] = {"name": name, "code": code}
+    push()
+    reload_lessons()
+    bot.send_message(message.chat.id, f"✅ Пару <b>{lid}</b> оновлено.", parse_mode="HTML")
+    lesson_item_flex(message, [lid])
+
+@flexSub(FLEX_SUB_INTERACTION.LESSON_ADD)
+def lesson_add_flex(message, DATA):
+    if len(DATA) == 0:
+        bot.send_message(message.chat.id, "➕ Введіть назву нової пари:")
+        bot.register_next_step_handler(message, lambda msg: lesson_add_flex(msg, [msg.text]))
+        return
+
+    if len(DATA) == 1:
+        bot.send_message(
+            message.chat.id,
+            "🔗 Введіть код посилання (Zoom ID або Google Meet код).\n"
+            "Для двох підгруп введіть у форматі <code>код1|код2</code>:",
+            parse_mode="HTML"
+        )
+        bot.register_next_step_handler(message, lambda msg: lesson_add_flex(msg, [DATA[0], msg.text]))
+        return
+
+    name, code = DATA[0].strip(), DATA[1].strip()
+    new_id = _next_lesson_id()
+    overrides = get_lesson_overrides()
+    overrides[str(new_id)] = {"name": name, "code": code}
+    push()
+    reload_lessons()
+    bot.send_message(message.chat.id, f"✅ Додано пару <b>№{new_id} — {name}</b>.", parse_mode="HTML")
+    lesson_list_flex(message, [])
+
+@flexSub(FLEX_SUB_INTERACTION.LESSON_REMOVE)
+def lesson_remove_flex(message, DATA):
+    if len(DATA) == 0:
+        return
+    lid = int(DATA[0])
+    if len(DATA) == 1:
+        name = DATABASE.lessons_names.get(lid, "?")
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton(text="✅ Так, видалити", callback_data=f"@(12:{lid},y)"),
+            types.InlineKeyboardButton(text="❌ Скасувати", callback_data=f"@(9:{lid})"),
+        )
+        bot.send_message(message.chat.id, f"Видалити пару <b>{lid}. {name}</b>?", parse_mode="HTML", reply_markup=markup)
+        return
+
+    overrides = get_lesson_overrides()
+    overrides[str(lid)] = None
+    push()
+    reload_lessons()
+    bot.send_message(message.chat.id, "🗑️ Пару видалено.", parse_mode="HTML")
+    lesson_list_flex(message, [])
+
 @flexSub(FLEX_SUB_INTERACTION.CHECK_DAY,False)
 def check_day_flex(message, DATA):
     if len(DATA) == 0:
@@ -387,7 +561,7 @@ def check_day_flex(message, DATA):
 
 
 def admin_command(message,func):
-    if (is_admin(message.chat.id)):
+    if is_admin(message.chat.id) or is_dev(message.chat.id):
         func(message)
     else:
         bot.send_message(message.chat.id, BASIC_MESSAGE.NO_ACCESS,parse_mode="HTML")
@@ -472,7 +646,8 @@ def scheduleToday(message):
 @bot.message_handler(func=lambda message: message.text == "Автори")
 def scheduleDay(message):
     txt = (
-        "@Nebula_Protogen та @danilka_kryt"
+        "@Nebula_Protogen та @danilka_kryt\n"
+        f"🔗 {get_bot_link()}"
     )
     bot.send_message(message.chat.id, txt,
     parse_mode="HTML")
@@ -583,10 +758,38 @@ def admin_keyboard(message):
     keyboard = None
     if not is_group(message.chat.id):
         keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("Оголошення", "Змінити графік @(0:1)", "Назад")
+    keyboard.add("Оголошення", "Змінити графік @(0:1)", "Список пар @(8)", "Назад")
+    keyboard.add("Дешборд")
     if is_dev(message.chat.id):
         keyboard.add("Dev mode")
     return keyboard
+
+def send_dashboard_link(message):
+    if not (is_admin(message.chat.id) or is_dev(message.chat.id)):
+        bot.send_message(message.chat.id, BASIC_MESSAGE.NO_ACCESS, parse_mode="HTML")
+        return
+    url = INTERACE.get_login_url(message.chat.id)
+    if not url:
+        bot.send_message(message.chat.id, "❌ Веб-дешборд зараз не запущено на боті.", parse_mode="HTML")
+        return
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(text="🖥️ Відкрити дешборд", url=url))
+    bot.send_message(
+        message.chat.id,
+        "🔐 <b>Одноразове посилання для входу</b> (діє 5 хвилин, лише для тебе):",
+        reply_markup=markup,
+        parse_mode="HTML"
+    )
+
+@bot.message_handler(func=lambda message: message.text == "Дешборд")
+def dashboard_button(message):
+    if canWork(message.chat.id):
+        send_dashboard_link(message)
+
+@bot.message_handler(commands=["dashboard"])
+def dashboard_command(message):
+    if canWork(message.chat.id):
+        send_dashboard_link(message)
 
 @bot.message_handler(func=lambda message: message.text == "Dev mode")
 def scheduleToday(message):
@@ -618,7 +821,7 @@ def start_keyboard(message):
     id = message.chat.id
     if not is_group(id):
         keyboard.add("Розклад на сьогодні", "Розклад на завтра", "Розклад")
-    if is_admin(id):
+    if is_admin(id) or is_dev(id):
         keyboard.add("Адмін Панель")
     keyboard.add("Інше")
     return keyboard
@@ -717,7 +920,7 @@ try:
         logging.getLogger("telebot").setLevel(logging.CRITICAL)
     print("🤖 Бот запущений")
     REMINDER.start()
-    #INTERACE.start(_finallyKILL)
+    INTERACE.start(_finallyKILL)
     bot.infinity_polling(skip_pending=True)
 except KeyboardInterrupt:
     print("🛑 Бот зупинено вручну")
